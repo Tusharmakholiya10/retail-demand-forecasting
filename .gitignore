@@ -2,12 +2,16 @@
 venv/
 .venv/
 
-# Python
+# Python cache
 __pycache__/
 *.py[cod]
 
 # Environment variables
 .env
+.env.*
+
+# Kaggle credentials
+kaggle.json
 
 # Raw datasets
 data/raw/*.csv
@@ -17,20 +21,28 @@ data/raw/*.zip
 data/processed/*.csv
 
 # Forecast outputs
-data/forecasts/*.csv
+data/forecasts/**/*.csv
 
 # Trained models
-models/*.pkl
-models/*.joblib
-models/*.json
+models/**/*.txt
+models/**/*.pkl
+models/**/*.joblib
+
+# Generated figures
+reports/figures/**/*.png
+reports/figures/**/*.jpg
+reports/figures/**/*.jpeg
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Logs
+*.log
 
 # IDE
 .vscode/
 .idea/
 
 # OS
-.DS_Store
 Thumbs.db
+.DS_Store

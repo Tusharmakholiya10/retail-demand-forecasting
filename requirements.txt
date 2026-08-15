@@ -9,3 +9,4 @@ jupyter
 kaggle
 joblib
 openpyxl
+lightgbm
