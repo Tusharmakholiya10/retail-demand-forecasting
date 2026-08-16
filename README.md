@@ -50,3 +50,57 @@ Future Demand Forecast
 Inventory Recommendation
        ↓
 Streamlit Dashboard
+
+  RAW DATA
+                       │
+                       ▼
+              Data Cleaning
+                       │
+                       ▼
+          External Feature Preparation
+                       │
+                       ├── Oil Prices
+                       └── Holidays
+                       │
+                       ▼
+             Feature Engineering
+                       │
+             ┌─────────┴─────────┐
+             │                   │
+        Calendar Features    Lag Features
+             │                   │
+             └─────────┬─────────┘
+                       │
+                       ▼
+              Rolling Features
+                       │
+                       ▼
+              Modeling Dataset
+                       │
+                       ▼
+              Model Training
+                       │
+             ┌─────────┴─────────┐
+             ▼                   ▼
+          LightGBM             XGBoost
+             │
+             ▼
+        Model Tuning
+             │
+             ▼
+      Tuned LightGBM Model
+             │
+             ▼
+       Future Forecasting
+             │
+             ▼
+       7-Day Demand Forecast
+             │
+             ▼
+      Inventory Calculation
+             │
+             ▼
+     Reorder Recommendations
+             │
+             ▼
+       Streamlit Dashboard
