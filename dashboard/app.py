@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import streamlit as st
-
+import plotly.express as px
 
 # ============================================================
 # PAGE CONFIGURATION
@@ -30,6 +30,21 @@ PREDICTIONS_PATH = os.path.join(
     "forecasts",
     "final_evaluation",
     "final_predictions.csv"
+)
+
+FUTURE_FORECAST_PATH = os.path.join(
+    BASE_DIR,
+    "data",
+    "forecasts",
+    "future",
+    "future_predictions.csv"
+)
+INVENTORY_PATH = os.path.join(
+    BASE_DIR,
+    "data",
+    "forecasts",
+    "inventory",
+    "inventory_recommendations.csv"
 )
 
 MODEL_COMPARISON_PATH = os.path.join(
@@ -320,23 +335,814 @@ st.line_chart(
     ]
 )
 
-
 # ============================================================
-# PREDICTION ERROR
+# STORE ANALYSIS
 # ============================================================
 
-st.subheader("📉 Prediction Error")
+st.markdown("---")
+st.header("🏪 Store Performance Analysis")
 
-error_daily = (
+store_analysis = (
     filtered_df
-    .groupby("date")
-    ["absolute_error"]
-    .mean()
+    .groupby("store_nbr")
+    .agg(
+        actual_sales=("actual_sales", "sum"),
+        predicted_sales=("predicted_sales", "sum"),
+        MAE=("absolute_error", "mean"),
+        observations=("actual_sales", "count")
+    )
+    .reset_index()
 )
 
-st.line_chart(
-    error_daily
+# Calculate WAPE
+store_analysis["WAPE"] = (
+    store_analysis["absolute_error"]
+    if "absolute_error" in store_analysis.columns
+    else 0
 )
+
+# Recalculate absolute error at store level
+store_analysis["absolute_error_total"] = (
+    filtered_df
+    .groupby("store_nbr")["absolute_error"]
+    .sum()
+    .values
+)
+
+store_analysis["WAPE"] = (
+    store_analysis["absolute_error_total"]
+    / store_analysis["actual_sales"].abs().replace(0, float("nan"))
+    * 100
+)
+
+# Sales difference
+store_analysis["sales_difference"] = (
+    store_analysis["predicted_sales"]
+    - store_analysis["actual_sales"]
+)
+
+# ============================================================
+# PRODUCT FAMILY ANALYSIS
+# ============================================================
+
+st.markdown("---")
+st.header("📦 Product Family Performance Analysis")
+
+family_analysis = (
+    filtered_df
+    .groupby("family")
+    .agg(
+        actual_sales=("actual_sales", "sum"),
+        predicted_sales=("predicted_sales", "sum"),
+        MAE=("absolute_error", "mean"),
+        observations=("actual_sales", "count")
+    )
+    .reset_index()
+)
+
+# Total absolute error
+family_absolute_error = (
+    filtered_df
+    .groupby("family")["absolute_error"]
+    .sum()
+    .reset_index(name="absolute_error_total")
+)
+
+family_analysis = family_analysis.merge(
+    family_absolute_error,
+    on="family",
+    how="left"
+)
+
+# WAPE
+family_analysis["WAPE"] = (
+    family_analysis["absolute_error_total"]
+    / family_analysis["actual_sales"].abs().replace(0, float("nan"))
+    * 100
+)
+
+# Sales difference
+family_analysis["sales_difference"] = (
+    family_analysis["predicted_sales"]
+    - family_analysis["actual_sales"]
+)
+
+# ------------------------------------------------------------
+# Family KPI cards
+# ------------------------------------------------------------
+
+best_family = family_analysis.loc[
+    family_analysis["MAE"].idxmin()
+]
+
+worst_family = family_analysis.loc[
+    family_analysis["MAE"].idxmax()
+]
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric(
+        "🏆 Best Family",
+        best_family["family"],
+        f"MAE: {best_family['MAE']:.2f}"
+    )
+
+with col2:
+    st.metric(
+        "⚠️ Highest Error Family",
+        worst_family["family"],
+        f"MAE: {worst_family['MAE']:.2f}"
+    )
+
+with col3:
+    st.metric(
+        "📦 Families Analyzed",
+        f"{len(family_analysis)}"
+    )
+
+# ------------------------------------------------------------
+# Family MAE
+# ------------------------------------------------------------
+
+family_mae = family_analysis.sort_values(
+    "MAE",
+    ascending=False
+)
+
+fig_family_mae = px.bar(
+    family_mae,
+    x="family",
+    y="MAE",
+    title="Product Family-wise Mean Absolute Error",
+    labels={
+        "family": "Product Family",
+        "MAE": "Mean Absolute Error"
+    }
+)
+
+fig_family_mae.update_layout(
+    xaxis_tickangle=-45
+)
+
+st.plotly_chart(
+    fig_family_mae,
+    use_container_width=True
+)
+
+# ------------------------------------------------------------
+# Family Actual vs Predicted
+# ------------------------------------------------------------
+
+family_sales = family_analysis.melt(
+    id_vars="family",
+    value_vars=[
+        "actual_sales",
+        "predicted_sales"
+    ],
+    var_name="sales_type",
+    value_name="sales"
+)
+
+family_sales["sales_type"] = family_sales[
+    "sales_type"
+].replace({
+    "actual_sales": "Actual Sales",
+    "predicted_sales": "Predicted Sales"
+})
+
+fig_family_sales = px.bar(
+    family_sales,
+    x="family",
+    y="sales",
+    color="sales_type",
+    barmode="group",
+    title="Actual vs Predicted Sales by Product Family",
+    labels={
+        "family": "Product Family",
+        "sales": "Sales",
+        "sales_type": "Type"
+    }
+)
+
+fig_family_sales.update_layout(
+    xaxis_tickangle=-45
+)
+
+st.plotly_chart(
+    fig_family_sales,
+    use_container_width=True
+)
+
+# ------------------------------------------------------------
+# Product Family Performance Table
+# ------------------------------------------------------------
+
+st.subheader("📋 Product Family Performance Details")
+
+display_family = family_analysis[
+    [
+        "family",
+        "actual_sales",
+        "predicted_sales",
+        "MAE",
+        "WAPE",
+        "sales_difference",
+        "observations"
+    ]
+].sort_values("MAE")
+
+display_family = display_family.rename(columns={
+    "family": "Product Family",
+    "actual_sales": "Actual Sales",
+    "predicted_sales": "Predicted Sales",
+    "MAE": "MAE",
+    "WAPE": "WAPE (%)",
+    "sales_difference": "Sales Difference",
+    "observations": "Observations"
+})
+
+st.dataframe(
+    display_family.style.format({
+        "Actual Sales": "{:,.0f}",
+        "Predicted Sales": "{:,.0f}",
+        "MAE": "{:,.2f}",
+        "WAPE (%)": "{:.2f}%",
+        "Sales Difference": "{:,.0f}",
+        "Observations": "{:,.0f}"
+    }),
+    use_container_width=True
+)
+
+# ------------------------------------------------------------
+# Store KPI cards
+# ------------------------------------------------------------
+
+best_store = store_analysis.loc[
+    store_analysis["MAE"].idxmin()
+]
+
+worst_store = store_analysis.loc[
+    store_analysis["MAE"].idxmax()
+]
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric(
+        "🏆 Best Store",
+        f"Store {int(best_store['store_nbr'])}",
+        f"MAE: {best_store['MAE']:.2f}"
+    )
+
+with col2:
+    st.metric(
+        "⚠️ Highest Error Store",
+        f"Store {int(worst_store['store_nbr'])}",
+        f"MAE: {worst_store['MAE']:.2f}"
+    )
+
+with col3:
+    st.metric(
+        "🏪 Stores Analyzed",
+        f"{len(store_analysis)}"
+    )
+
+# ------------------------------------------------------------
+# Store MAE chart
+# ------------------------------------------------------------
+
+store_mae = store_analysis.sort_values("MAE", ascending=False)
+
+fig_store_mae = px.bar(
+    store_mae,
+    x="store_nbr",
+    y="MAE",
+    title="Store-wise Mean Absolute Error",
+    labels={
+        "store_nbr": "Store",
+        "MAE": "Mean Absolute Error"
+    }
+)
+
+fig_store_mae.update_layout(
+    xaxis=dict(type="category")
+)
+
+st.plotly_chart(
+    fig_store_mae,
+    use_container_width=True
+)
+
+# ------------------------------------------------------------
+# Store Actual vs Predicted
+# ------------------------------------------------------------
+
+store_sales = store_analysis.melt(
+    id_vars="store_nbr",
+    value_vars=["actual_sales", "predicted_sales"],
+    var_name="sales_type",
+    value_name="sales"
+)
+
+store_sales["sales_type"] = store_sales["sales_type"].replace({
+    "actual_sales": "Actual Sales",
+    "predicted_sales": "Predicted Sales"
+})
+
+fig_store_sales = px.bar(
+    store_sales,
+    x="store_nbr",
+    y="sales",
+    color="sales_type",
+    barmode="group",
+    title="Actual vs Predicted Sales by Store",
+    labels={
+        "store_nbr": "Store",
+        "sales": "Sales",
+        "sales_type": "Type"
+    }
+)
+
+fig_store_sales.update_layout(
+    xaxis=dict(type="category")
+)
+
+st.plotly_chart(
+    fig_store_sales,
+    use_container_width=True
+)
+
+# ------------------------------------------------------------
+# Store performance table
+# ------------------------------------------------------------
+
+st.subheader("📋 Store Performance Details")
+
+display_store = store_analysis[
+    [
+        "store_nbr",
+        "actual_sales",
+        "predicted_sales",
+        "MAE",
+        "WAPE",
+        "sales_difference",
+        "observations"
+    ]
+].sort_values("MAE")
+
+display_store = display_store.rename(columns={
+    "store_nbr": "Store",
+    "actual_sales": "Actual Sales",
+    "predicted_sales": "Predicted Sales",
+    "MAE": "MAE",
+    "WAPE": "WAPE (%)",
+    "sales_difference": "Sales Difference",
+    "observations": "Observations"
+})
+
+st.dataframe(
+    display_store.style.format({
+        "Actual Sales": "{:,.0f}",
+        "Predicted Sales": "{:,.0f}",
+        "MAE": "{:,.2f}",
+        "WAPE (%)": "{:.2f}%",
+        "Sales Difference": "{:,.0f}",
+        "Observations": "{:,.0f}"
+    }),
+    use_container_width=True
+)
+
+# ============================================================
+# MONTHLY / TIME ANALYSIS
+# ============================================================
+
+st.markdown("---")
+st.header("📅 Monthly / Time Analysis")
+
+if not filtered_df.empty:
+
+    monthly_analysis = (
+        filtered_df
+        .assign(month=filtered_df["date"].dt.to_period("M").dt.to_timestamp())
+        .groupby("month")
+        .agg(
+            actual_sales=("actual_sales", "sum"),
+            predicted_sales=("predicted_sales", "sum"),
+            MAE=("absolute_error", "mean"),
+            absolute_error_total=("absolute_error", "sum")
+        )
+        .reset_index()
+    )
+
+    monthly_analysis["WAPE"] = (
+        monthly_analysis["absolute_error_total"]
+        / monthly_analysis["actual_sales"].abs().replace(0, float("nan"))
+        * 100
+    )
+
+    monthly_analysis["sales_difference"] = (
+        monthly_analysis["predicted_sales"]
+        - monthly_analysis["actual_sales"]
+    )
+
+    # Monthly KPI cards
+    best_month = monthly_analysis.loc[
+        monthly_analysis["MAE"].idxmin()
+    ]
+
+    worst_month = monthly_analysis.loc[
+        monthly_analysis["MAE"].idxmax()
+    ]
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric(
+            "🏆 Best Month",
+            best_month["month"].strftime("%B %Y"),
+            f"MAE: {best_month['MAE']:.2f}"
+        )
+
+    with col2:
+        st.metric(
+            "⚠️ Highest Error Month",
+            worst_month["month"].strftime("%B %Y"),
+            f"MAE: {worst_month['MAE']:.2f}"
+        )
+
+    with col3:
+        st.metric(
+            "📅 Months Analyzed",
+            f"{len(monthly_analysis)}"
+        )
+
+    # Actual vs Predicted by month
+    monthly_sales = monthly_analysis.melt(
+        id_vars="month",
+        value_vars=["actual_sales", "predicted_sales"],
+        var_name="sales_type",
+        value_name="sales"
+    )
+
+    monthly_sales["sales_type"] = monthly_sales["sales_type"].replace({
+        "actual_sales": "Actual Sales",
+        "predicted_sales": "Predicted Sales"
+    })
+
+    fig_monthly_sales = px.line(
+        monthly_sales,
+        x="month",
+        y="sales",
+        color="sales_type",
+        markers=True,
+        title="Monthly Actual vs Predicted Sales",
+        labels={
+            "month": "Month",
+            "sales": "Sales",
+            "sales_type": "Type"
+        }
+    )
+
+    st.plotly_chart(
+        fig_monthly_sales,
+        use_container_width=True
+    )
+
+    # Monthly MAE
+    fig_monthly_mae = px.bar(
+        monthly_analysis,
+        x="month",
+        y="MAE",
+        title="Monthly Mean Absolute Error",
+        labels={
+            "month": "Month",
+            "MAE": "Mean Absolute Error"
+        }
+    )
+
+    st.plotly_chart(
+        fig_monthly_mae,
+        use_container_width=True
+    )
+
+    # Monthly WAPE
+    fig_monthly_wape = px.line(
+        monthly_analysis,
+        x="month",
+        y="WAPE",
+        markers=True,
+        title="Monthly WAPE",
+        labels={
+            "month": "Month",
+            "WAPE": "WAPE (%)"
+        }
+    )
+
+    st.plotly_chart(
+        fig_monthly_wape,
+        use_container_width=True
+    )
+
+    st.subheader("📋 Monthly Performance Details")
+
+    display_monthly = monthly_analysis[
+        [
+            "month",
+            "actual_sales",
+            "predicted_sales",
+            "MAE",
+            "WAPE",
+            "sales_difference"
+        ]
+    ].copy()
+
+    display_monthly["month"] = display_monthly["month"].dt.strftime("%Y-%m")
+
+    display_monthly = display_monthly.rename(columns={
+        "month": "Month",
+        "actual_sales": "Actual Sales",
+        "predicted_sales": "Predicted Sales",
+        "MAE": "MAE",
+        "WAPE": "WAPE (%)",
+        "sales_difference": "Sales Difference"
+    })
+
+    st.dataframe(
+        display_monthly.style.format({
+            "Actual Sales": "{:,.0f}",
+            "Predicted Sales": "{:,.0f}",
+            "MAE": "{:,.2f}",
+            "WAPE (%)": "{:.2f}%",
+            "Sales Difference": "{:,.0f}"
+        }),
+        use_container_width=True,
+        hide_index=True
+    )
+
+else:
+    st.info("No data available for the selected filters.")
+
+
+# ============================================================
+# ERROR ANALYSIS
+# ============================================================
+
+st.markdown("---")
+st.header("⚠️ Error Analysis")
+
+if not filtered_df.empty:
+
+    # Residual = prediction - actual
+    error_df = filtered_df.copy()
+    error_df["residual"] = (
+        error_df["predicted_sales"]
+        - error_df["actual_sales"]
+    )
+
+    error_df["error_direction"] = error_df["residual"].apply(
+        lambda x: "Over-prediction" if x > 0
+        else ("Under-prediction" if x < 0 else "Exact")
+    )
+
+    # Error KPIs
+    over_predictions = (error_df["residual"] > 0).sum()
+    under_predictions = (error_df["residual"] < 0).sum()
+    exact_predictions = (error_df["residual"] == 0).sum()
+
+    mean_error = error_df["residual"].mean()
+    median_absolute_error = error_df["absolute_error"].median()
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric(
+            "Mean Error",
+            f"{mean_error:,.2f}"
+        )
+
+    with col2:
+        st.metric(
+            "Median Absolute Error",
+            f"{median_absolute_error:,.2f}"
+        )
+
+    with col3:
+        st.metric(
+            "Over-predictions",
+            f"{over_predictions:,}"
+        )
+
+    with col4:
+        st.metric(
+            "Under-predictions",
+            f"{under_predictions:,}"
+        )
+
+    # Residual distribution
+    fig_error_distribution = px.histogram(
+        error_df,
+        x="residual",
+        nbins=60,
+        title="Prediction Error Distribution",
+        labels={
+            "residual": "Prediction Error (Predicted - Actual)",
+            "count": "Number of Observations"
+        }
+    )
+
+    fig_error_distribution.add_vline(
+        x=0,
+        line_dash="dash"
+    )
+
+    st.plotly_chart(
+        fig_error_distribution,
+        use_container_width=True
+    )
+
+    # Error over time
+    daily_error = (
+        error_df
+        .groupby("date")
+        .agg(
+            mean_error=("residual", "mean"),
+            MAE=("absolute_error", "mean")
+        )
+        .reset_index()
+    )
+
+    fig_error_time = px.line(
+        daily_error,
+        x="date",
+        y=["mean_error", "MAE"],
+        title="Forecast Error Over Time",
+        labels={
+            "date": "Date",
+            "value": "Error",
+            "variable": "Metric"
+        }
+    )
+
+    fig_error_time.add_hline(
+        y=0,
+        line_dash="dash"
+    )
+
+    st.plotly_chart(
+        fig_error_time,
+        use_container_width=True
+    )
+
+    # Over vs under prediction
+    direction_summary = (
+        error_df["error_direction"]
+        .value_counts()
+        .rename_axis("Error Type")
+        .reset_index(name="Observations")
+    )
+
+    fig_direction = px.bar(
+        direction_summary,
+        x="Error Type",
+        y="Observations",
+        title="Over-prediction vs Under-prediction",
+        labels={
+            "Error Type": "Error Direction",
+            "Observations": "Number of Observations"
+        }
+    )
+
+    st.plotly_chart(
+        fig_direction,
+        use_container_width=True
+    )
+
+    # Largest errors
+    st.subheader("🔴 Largest Prediction Errors")
+
+    top_errors_analysis = (
+        error_df
+        .sort_values("absolute_error", ascending=False)
+        .head(20)
+        [
+            [
+                "date",
+                "store_nbr",
+                "family",
+                "actual_sales",
+                "predicted_sales",
+                "residual",
+                "absolute_error",
+                "percentage_error"
+            ]
+        ]
+        .copy()
+    )
+
+    top_errors_analysis = top_errors_analysis.rename(columns={
+        "date": "Date",
+        "store_nbr": "Store",
+        "family": "Product Family",
+        "actual_sales": "Actual Sales",
+        "predicted_sales": "Predicted Sales",
+        "residual": "Error",
+        "absolute_error": "Absolute Error",
+        "percentage_error": "Percentage Error"
+    })
+
+    st.dataframe(
+        top_errors_analysis.style.format({
+            "Actual Sales": "{:,.2f}",
+            "Predicted Sales": "{:,.2f}",
+            "Error": "{:,.2f}",
+            "Absolute Error": "{:,.2f}",
+            "Percentage Error": "{:.2f}%"
+        }),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # Largest over-predictions
+    st.subheader("🔴 Top Over-predictions")
+
+    over_df = (
+        error_df[error_df["residual"] > 0]
+        .sort_values("residual", ascending=False)
+        .head(10)
+        [
+            [
+                "date",
+                "store_nbr",
+                "family",
+                "actual_sales",
+                "predicted_sales",
+                "residual"
+            ]
+        ]
+        .copy()
+    )
+
+    over_df = over_df.rename(columns={
+        "date": "Date",
+        "store_nbr": "Store",
+        "family": "Product Family",
+        "actual_sales": "Actual Sales",
+        "predicted_sales": "Predicted Sales",
+        "residual": "Over-prediction"
+    })
+
+    st.dataframe(
+        over_df.style.format({
+            "Actual Sales": "{:,.2f}",
+            "Predicted Sales": "{:,.2f}",
+            "Over-prediction": "{:,.2f}"
+        }),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # Largest under-predictions
+    st.subheader("🔵 Top Under-predictions")
+
+    under_df = (
+        error_df[error_df["residual"] < 0]
+        .sort_values("residual", ascending=True)
+        .head(10)
+        [
+            [
+                "date",
+                "store_nbr",
+                "family",
+                "actual_sales",
+                "predicted_sales",
+                "residual"
+            ]
+        ]
+        .copy()
+    )
+
+    under_df = under_df.rename(columns={
+        "date": "Date",
+        "store_nbr": "Store",
+        "family": "Product Family",
+        "actual_sales": "Actual Sales",
+        "predicted_sales": "Predicted Sales",
+        "residual": "Under-prediction"
+    })
+
+    st.dataframe(
+        under_df.style.format({
+            "Actual Sales": "{:,.2f}",
+            "Predicted Sales": "{:,.2f}",
+            "Under-prediction": "{:,.2f}"
+        }),
+        use_container_width=True,
+        hide_index=True
+    )
+
+else:
+    st.info("No data available for error analysis with the selected filters.")
 
 
 # ============================================================
@@ -396,7 +1202,7 @@ else:
 # ============================================================
 
 st.subheader(
-    "📅 Monthly Performance"
+    "📁 Saved Monthly Evaluation Metrics"
 )
 
 monthly_data = load_csv(
@@ -418,25 +1224,503 @@ else:
     )
 
 
+
 # ============================================================
-# MODEL COMPARISON
+# FORECAST INSIGHTS & BUSINESS RECOMMENDATIONS
 # ============================================================
 
-st.subheader(
-    "🤖 Model Comparison"
-)
+st.markdown("---")
+st.header("💡 Forecast Insights & Business Recommendations")
 
-comparison = load_csv(
-    MODEL_COMPARISON_PATH
-)
+if not filtered_df.empty:
 
-if comparison is not None:
+    insight_df = filtered_df.copy()
+
+    insight_df["residual"] = (
+        insight_df["predicted_sales"]
+        - insight_df["actual_sales"]
+    )
+
+    insight_df["error_direction"] = insight_df["residual"].apply(
+        lambda x: "Over-prediction" if x > 0
+        else ("Under-prediction" if x < 0 else "Exact")
+    )
+
+    insight_actual = insight_df["actual_sales"].sum()
+    insight_predicted = insight_df["predicted_sales"].sum()
+    insight_abs_error = insight_df["absolute_error"].sum()
+
+    if insight_actual != 0:
+        insight_wape = (
+            insight_abs_error
+            / abs(insight_actual)
+            * 100
+        )
+    else:
+        insight_wape = 0
+
+    insight_bias = (
+        insight_df["residual"].mean()
+    )
+
+    bias_percent = (
+        insight_df["residual"].sum()
+        / abs(insight_actual)
+        * 100
+        if insight_actual != 0
+        else 0
+    )
+
+    over_count = (
+        insight_df["residual"] > 0
+    ).sum()
+
+    under_count = (
+        insight_df["residual"] < 0
+    ).sum()
+
+    # --------------------------------------------------------
+    # Insight calculations
+    # --------------------------------------------------------
+
+    store_insights = (
+        insight_df
+        .groupby("store_nbr")
+        .agg(
+            actual_sales=("actual_sales", "sum"),
+            predicted_sales=("predicted_sales", "sum"),
+            MAE=("absolute_error", "mean"),
+            absolute_error=("absolute_error", "sum"),
+            observations=("actual_sales", "count")
+        )
+        .reset_index()
+    )
+
+    store_insights["WAPE"] = (
+        store_insights["absolute_error"]
+        / store_insights["actual_sales"].abs().replace(
+            0, float("nan")
+        )
+        * 100
+    )
+
+    store_insights["sales_difference"] = (
+        store_insights["predicted_sales"]
+        - store_insights["actual_sales"]
+    )
+
+    family_insights = (
+        insight_df
+        .groupby("family")
+        .agg(
+            actual_sales=("actual_sales", "sum"),
+            predicted_sales=("predicted_sales", "sum"),
+            MAE=("absolute_error", "mean"),
+            absolute_error=("absolute_error", "sum"),
+            observations=("actual_sales", "count")
+        )
+        .reset_index()
+    )
+
+    family_insights["WAPE"] = (
+        family_insights["absolute_error"]
+        / family_insights["actual_sales"].abs().replace(
+            0, float("nan")
+        )
+        * 100
+    )
+
+    family_insights["sales_difference"] = (
+        family_insights["predicted_sales"]
+        - family_insights["actual_sales"]
+    )
+
+    best_insight_store = store_insights.loc[
+        store_insights["MAE"].idxmin()
+    ]
+
+    worst_insight_store = store_insights.loc[
+        store_insights["MAE"].idxmax()
+    ]
+
+    worst_insight_family = family_insights.loc[
+        family_insights["MAE"].idxmax()
+    ]
+
+    best_insight_family = family_insights.loc[
+        family_insights["MAE"].idxmin()
+    ]
+
+    # --------------------------------------------------------
+    # Business KPI cards
+    # --------------------------------------------------------
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric(
+            "🎯 Forecast WAPE",
+            f"{insight_wape:.2f}%"
+        )
+
+    with col2:
+        st.metric(
+            "⚖️ Forecast Bias",
+            f"{insight_bias:,.2f}"
+        )
+
+    with col3:
+        st.metric(
+            "📈 Over-predictions",
+            f"{over_count:,}"
+        )
+
+    with col4:
+        st.metric(
+            "📉 Under-predictions",
+            f"{under_count:,}"
+        )
+
+    # --------------------------------------------------------
+    # Automatic recommendations
+    # --------------------------------------------------------
+
+    st.subheader("🧠 Automatic Business Insights")
+
+    if insight_wape <= 10:
+        st.success(
+            f"**Strong forecast accuracy:** WAPE is "
+            f"**{insight_wape:.2f}%**, indicating that the "
+            f"forecast is closely tracking actual demand."
+        )
+    elif insight_wape <= 20:
+        st.info(
+            f"**Reasonable forecast accuracy:** WAPE is "
+            f"**{insight_wape:.2f}%**. The model is useful for "
+            f"planning, but some stores or product families "
+            f"may require closer monitoring."
+        )
+    else:
+        st.warning(
+            f"**Forecast accuracy needs attention:** WAPE is "
+            f"**{insight_wape:.2f}%**. Consider investigating "
+            f"the highest-error stores and product families."
+        )
+
+    if bias_percent > 1:
+        st.warning(
+            f"**Systematic over-prediction:** predictions are "
+            f"higher than actual demand by approximately "
+            f"**{abs(bias_percent):.2f}%** of total actual sales. "
+            f"Review inventory and promotion assumptions."
+        )
+    elif bias_percent < -1:
+        st.warning(
+            f"**Systematic under-prediction:** predictions are "
+            f"lower than actual demand by approximately "
+            f"**{abs(bias_percent):.2f}%** of total actual sales. "
+            f"Consider reviewing demand spikes, promotions and "
+            f"recent sales trends."
+        )
+    else:
+        st.success(
+            "**Low overall forecast bias:** the model is not "
+            "showing a strong tendency to systematically "
+            "over-predict or under-predict."
+        )
+
+    rec_col1, rec_col2 = st.columns(2)
+
+    with rec_col1:
+        st.markdown("#### 🏪 Store Recommendation")
+
+        st.write(
+            f"**Store {int(worst_insight_store['store_nbr'])}** "
+            f"has the highest filtered MAE of "
+            f"**{worst_insight_store['MAE']:,.2f}**."
+        )
+
+        st.write(
+            "➡️ Prioritize this store for investigation of "
+            "promotions, demand spikes, unusual sales patterns "
+            "and potential data-quality issues."
+        )
+
+        st.caption(
+            f"Best-performing store: "
+            f"Store {int(best_insight_store['store_nbr'])} "
+            f"(MAE {best_insight_store['MAE']:,.2f})"
+        )
+
+    with rec_col2:
+        st.markdown("#### 📦 Product Recommendation")
+
+        st.write(
+            f"**{worst_insight_family['family']}** has the "
+            f"highest filtered MAE of "
+            f"**{worst_insight_family['MAE']:,.2f}**."
+        )
+
+        st.write(
+            "➡️ Review this product family separately when "
+            "planning inventory, promotions and safety stock."
+        )
+
+        st.caption(
+            f"Best-performing family: "
+            f"{best_insight_family['family']} "
+            f"(MAE {best_insight_family['MAE']:,.2f})"
+        )
+
+    # --------------------------------------------------------
+    # Priority table
+    # --------------------------------------------------------
+
+    st.subheader("🚦 Priority Areas")
+
+    priority_stores = (
+        store_insights
+        .sort_values("MAE", ascending=False)
+        .head(5)
+        .copy()
+    )
+
+    priority_stores["Priority"] = [
+        "🔴 High" if i < 2 else
+        "🟠 Medium" if i < 4 else
+        "🟢 Monitor"
+        for i in range(len(priority_stores))
+    ]
+
+    priority_stores = priority_stores[
+        [
+            "Priority",
+            "store_nbr",
+            "MAE",
+            "WAPE",
+            "sales_difference"
+        ]
+    ].rename(columns={
+        "store_nbr": "Store",
+        "MAE": "MAE",
+        "WAPE": "WAPE (%)",
+        "sales_difference": "Sales Difference"
+    })
 
     st.dataframe(
-        comparison,
+        priority_stores.style.format({
+            "MAE": "{:,.2f}",
+            "WAPE (%)": "{:.2f}%",
+            "Sales Difference": "{:,.0f}"
+        }),
         use_container_width=True,
         hide_index=True
     )
+
+else:
+    st.info(
+        "No filtered data is available for generating insights."
+    )
+
+
+# ============================================================
+# MODEL PERFORMANCE & COMPARISON
+# ============================================================
+
+st.markdown("---")
+st.header("🤖 Model Performance & Comparison")
+
+comparison_dashboard = load_csv(
+    MODEL_COMPARISON_PATH
+)
+
+if comparison_dashboard is not None and not comparison_dashboard.empty:
+
+    comparison_dashboard = comparison_dashboard.copy()
+
+    required_model_columns = [
+        "model",
+        "MAE",
+        "RMSE",
+        "RMSLE"
+    ]
+
+    if all(
+        column in comparison_dashboard.columns
+        for column in required_model_columns
+    ):
+
+        # --------------------------------------------
+        # Best model cards
+        # --------------------------------------------
+
+        best_mae_model = comparison_dashboard.loc[
+            comparison_dashboard["MAE"].idxmin()
+        ]
+
+        best_rmse_model = comparison_dashboard.loc[
+            comparison_dashboard["RMSE"].idxmin()
+        ]
+
+        best_rmsle_model = comparison_dashboard.loc[
+            comparison_dashboard["RMSLE"].idxmin()
+        ]
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                "🏆 Best MAE",
+                str(best_mae_model["model"]),
+                f"{best_mae_model['MAE']:.2f}"
+            )
+
+        with col2:
+            st.metric(
+                "🏆 Best RMSE",
+                str(best_rmse_model["model"]),
+                f"{best_rmse_model['RMSE']:.2f}"
+            )
+
+        with col3:
+            st.metric(
+                "🏆 Best RMSLE",
+                str(best_rmsle_model["model"]),
+                f"{best_rmsle_model['RMSLE']:.4f}"
+            )
+
+        # --------------------------------------------
+        # Metric comparison
+        # --------------------------------------------
+
+        comparison_long = comparison_dashboard.melt(
+            id_vars=["model"],
+            value_vars=["MAE", "RMSE", "RMSLE"],
+            var_name="Metric",
+            value_name="Score"
+        )
+
+        fig_model_metrics = px.bar(
+            comparison_long,
+            x="model",
+            y="Score",
+            color="Metric",
+            barmode="group",
+            title="Model Performance Comparison",
+            labels={
+                "model": "Model",
+                "Score": "Error Score",
+                "Metric": "Metric"
+            }
+        )
+
+        fig_model_metrics.update_layout(
+            xaxis_tickangle=-35
+        )
+
+        st.plotly_chart(
+            fig_model_metrics,
+            use_container_width=True
+        )
+
+        # --------------------------------------------
+        # Improvement over baseline
+        # --------------------------------------------
+
+        baseline_candidates = comparison_dashboard[
+            comparison_dashboard["model"].astype(str).str.contains(
+                "Seasonal_Lag_7|Naive_Lag_1",
+                case=False,
+                regex=True
+            )
+        ]
+
+        tuned_candidates = comparison_dashboard[
+            comparison_dashboard["model"].astype(str).str.contains(
+                "LightGBM",
+                case=False,
+                regex=True
+            )
+        ]
+
+        if (
+            not baseline_candidates.empty
+            and not tuned_candidates.empty
+        ):
+
+            baseline_row = baseline_candidates.sort_values(
+                "MAE"
+            ).iloc[0]
+
+            tuned_row = tuned_candidates.sort_values(
+                "MAE"
+            ).iloc[0]
+
+            mae_improvement = (
+                (
+                    baseline_row["MAE"]
+                    - tuned_row["MAE"]
+                )
+                / baseline_row["MAE"]
+                * 100
+            )
+
+            rmse_improvement = (
+                (
+                    baseline_row["RMSE"]
+                    - tuned_row["RMSE"]
+                )
+                / baseline_row["RMSE"]
+                * 100
+            )
+
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.metric(
+                    "MAE Improvement",
+                    f"{mae_improvement:.2f}%",
+                    f"{baseline_row['model']} → {tuned_row['model']}"
+                )
+
+            with col2:
+                st.metric(
+                    "RMSE Improvement",
+                    f"{rmse_improvement:.2f}%"
+                )
+
+            with col3:
+                st.metric(
+                    "Final Tuned MAE",
+                    f"{tuned_row['MAE']:.2f}"
+                )
+
+            st.success(
+                f"The selected LightGBM model reduces MAE from "
+                f"**{baseline_row['MAE']:.2f}** "
+                f"({baseline_row['model']}) to "
+                f"**{tuned_row['MAE']:.2f}** "
+                f"({tuned_row['model']})."
+            )
+
+        st.subheader("📋 Model Comparison Details")
+
+        st.dataframe(
+            comparison_dashboard.style.format({
+                "MAE": "{:,.4f}",
+                "RMSE": "{:,.4f}",
+                "RMSLE": "{:.4f}"
+            }),
+            use_container_width=True,
+            hide_index=True
+        )
+
+    else:
+
+        st.warning(
+            "Model comparison file is missing one or more "
+            "required columns: model, MAE, RMSE, RMSLE."
+        )
 
 else:
 
@@ -477,7 +1761,7 @@ else:
 # ============================================================
 
 st.subheader(
-    "⚠️ Largest Prediction Errors"
+    "📌 Quick View: Largest Filtered Errors"
 )
 
 top_errors = filtered_df.sort_values(
@@ -506,7 +1790,609 @@ with st.expander(
         hide_index=True
     )
 
+# ============================================================
+# FUTURE DEMAND FORECAST
+# ============================================================
 
+st.header("🔮 Future Demand Forecast")
+
+st.markdown(
+    """
+    This section shows the **7-day future demand forecast**
+    generated by the tuned LightGBM model.
+    """
+)
+
+# ------------------------------------------------------------
+# LOAD FUTURE FORECAST
+# ------------------------------------------------------------
+
+if os.path.exists(FUTURE_FORECAST_PATH):
+
+    future_df = pd.read_csv(
+        FUTURE_FORECAST_PATH
+    )
+
+    future_df["date"] = pd.to_datetime(
+        future_df["date"]
+    )
+
+    # --------------------------------------------------------
+    # FILTERS
+    # --------------------------------------------------------
+
+    st.subheader("🎛️ Forecast Filters")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+
+        selected_date = st.selectbox(
+            "📅 Forecast Date",
+            sorted(
+                future_df["date"].dt.date.unique()
+            )
+        )
+
+    with col2:
+
+        store_options = ["All Stores"] + sorted(
+            future_df["store_nbr"].unique().tolist()
+        )
+
+        selected_store = st.selectbox(
+            "🏪 Store",
+            store_options
+        )
+
+    with col3:
+
+        family_options = ["All Families"] + sorted(
+            future_df["family"].unique().tolist()
+        )
+
+        selected_family = st.selectbox(
+            "📦 Product Family",
+            family_options
+        )
+
+    # --------------------------------------------------------
+    # APPLY FILTERS
+    # --------------------------------------------------------
+
+    filtered_future = future_df[
+        future_df["date"].dt.date == selected_date
+    ].copy()
+
+    if selected_store != "All Stores":
+
+        filtered_future = filtered_future[
+            filtered_future["store_nbr"] == selected_store
+        ]
+
+    if selected_family != "All Families":
+
+        filtered_future = filtered_future[
+            filtered_future["family"] == selected_family
+        ]
+
+    # --------------------------------------------------------
+    # KPI CARDS
+    # --------------------------------------------------------
+
+    total_forecast = filtered_future[
+        "predicted_sales"
+    ].sum()
+
+    average_forecast = filtered_future[
+        "predicted_sales"
+    ].mean()
+
+    max_forecast = filtered_future[
+        "predicted_sales"
+    ].max()
+
+    prediction_count = len(
+        filtered_future
+    )
+
+    k1, k2, k3, k4 = st.columns(4)
+
+    k1.metric(
+        "🔮 Total Forecast",
+        f"{total_forecast:,.0f}"
+    )
+
+    k2.metric(
+        "📊 Average Prediction",
+        f"{average_forecast:,.2f}"
+    )
+
+    k3.metric(
+        "⬆️ Highest Prediction",
+        f"{max_forecast:,.2f}"
+    )
+
+    k4.metric(
+        "📦 Forecast Records",
+        f"{prediction_count:,}"
+    )
+
+    # --------------------------------------------------------
+    # DAILY FORECAST
+    # --------------------------------------------------------
+
+    st.subheader("📈 7-Day Future Demand")
+
+    daily_forecast = (
+        future_df
+        .groupby("date", as_index=False)
+        ["predicted_sales"]
+        .sum()
+    )
+
+    st.line_chart(
+        daily_forecast.set_index("date")[
+            "predicted_sales"
+        ]
+    )
+
+    # --------------------------------------------------------
+    # FAMILY FORECAST
+    # --------------------------------------------------------
+
+    st.subheader(
+        "📦 Demand by Product Family"
+    )
+
+    family_forecast = (
+        filtered_future
+        .groupby(
+            "family",
+            as_index=False
+        )["predicted_sales"]
+        .sum()
+        .sort_values(
+            "predicted_sales",
+            ascending=False
+        )
+    )
+
+    st.bar_chart(
+        family_forecast.set_index(
+            "family"
+        )["predicted_sales"]
+    )
+
+    # --------------------------------------------------------
+    # STORE FORECAST
+    # --------------------------------------------------------
+
+    st.subheader(
+        "🏪 Demand by Store"
+    )
+
+    store_forecast = (
+        filtered_future
+        .groupby(
+            "store_nbr",
+            as_index=False
+        )["predicted_sales"]
+        .sum()
+        .sort_values(
+            "predicted_sales",
+            ascending=False
+        )
+    )
+
+    st.bar_chart(
+        store_forecast.set_index(
+            "store_nbr"
+        )["predicted_sales"]
+    )
+
+    # --------------------------------------------------------
+    # TOP 10 PREDICTIONS
+    # --------------------------------------------------------
+
+    st.subheader(
+        "🔥 Top 10 Predicted Store-Family Combinations"
+    )
+
+    top_future = (
+        filtered_future
+        .sort_values(
+            "predicted_sales",
+            ascending=False
+        )
+        .head(10)
+        [
+            [
+                "date",
+                "store_nbr",
+                "family",
+                "city",
+                "state",
+                "predicted_sales"
+            ]
+        ]
+        .copy()
+    )
+
+    top_future["predicted_sales"] = (
+        top_future["predicted_sales"]
+        .round(2)
+    )
+
+    st.dataframe(
+        top_future,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # --------------------------------------------------------
+    # DOWNLOAD
+    # --------------------------------------------------------
+
+    st.subheader(
+        "📥 Download Future Forecast"
+    )
+
+    csv_data = future_df.to_csv(
+        index=False
+    )
+
+    st.download_button(
+        label="⬇️ Download 7-Day Forecast CSV",
+        data=csv_data,
+        file_name="future_demand_forecast.csv",
+        mime="text/csv"
+    )
+
+else:
+
+    st.warning(
+        "Future forecast file not found."
+    )
+
+    st.info(
+        f"Expected file:\n{FUTURE_FORECAST_PATH}"
+    )
+# ============================================================
+# INVENTORY PLANNING & REORDER RECOMMENDATIONS
+# ============================================================
+
+st.header("📦 Inventory Planning & Reorder Recommendations")
+
+st.markdown(
+    """
+    This section converts the **7-day demand forecast** into
+    inventory planning recommendations using forecast demand,
+    safety stock, and reorder-point calculations.
+    
+    **Note:** Priority is demand-based because actual inventory
+    levels and supplier lead times are not available in the dataset.
+    """
+)
+
+if os.path.exists(INVENTORY_PATH):
+
+    inventory_df = pd.read_csv(
+        INVENTORY_PATH
+    )
+
+    # --------------------------------------------------------
+    # FILTERS
+    # --------------------------------------------------------
+
+    st.subheader("🎛️ Inventory Filters")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+
+        inventory_store_options = [
+            "All Stores"
+        ] + sorted(
+            inventory_df["store_nbr"]
+            .unique()
+            .tolist()
+        )
+
+        inventory_store = st.selectbox(
+            "🏪 Store",
+            inventory_store_options,
+            key="inventory_store"
+        )
+
+    with col2:
+
+        inventory_family_options = [
+            "All Families"
+        ] + sorted(
+            inventory_df["family"]
+            .unique()
+            .tolist()
+        )
+
+        inventory_family = st.selectbox(
+            "📦 Product Family",
+            inventory_family_options,
+            key="inventory_family"
+        )
+
+    with col3:
+
+        priority_options = [
+            "All Priorities",
+            "HIGH PRIORITY",
+            "MEDIUM PRIORITY",
+            "LOW PRIORITY"
+        ]
+
+        inventory_priority = st.selectbox(
+            "🚦 Priority",
+            priority_options,
+            key="inventory_priority"
+        )
+
+    # --------------------------------------------------------
+    # APPLY FILTERS
+    # --------------------------------------------------------
+
+    filtered_inventory = inventory_df.copy()
+
+    if inventory_store != "All Stores":
+
+        filtered_inventory = filtered_inventory[
+            filtered_inventory["store_nbr"]
+            == inventory_store
+        ]
+
+    if inventory_family != "All Families":
+
+        filtered_inventory = filtered_inventory[
+            filtered_inventory["family"]
+            == inventory_family
+        ]
+
+    if inventory_priority != "All Priorities":
+
+        filtered_inventory = filtered_inventory[
+            filtered_inventory[
+                "inventory_priority"
+            ]
+            == inventory_priority
+        ]
+
+    # --------------------------------------------------------
+    # KPI CALCULATIONS
+    # --------------------------------------------------------
+
+    total_forecast_demand = (
+        filtered_inventory[
+            "forecast_7_day"
+        ].sum()
+    )
+
+    total_safety_stock = (
+        filtered_inventory[
+            "safety_stock"
+        ].sum()
+    )
+
+    total_recommended_stock = (
+        filtered_inventory[
+            "recommended_stock"
+        ].sum()
+    )
+
+    high_priority_count = (
+        filtered_inventory[
+            "inventory_priority"
+        ]
+        .eq("HIGH PRIORITY")
+        .sum()
+    )
+
+    # --------------------------------------------------------
+    # KPI CARDS
+    # --------------------------------------------------------
+
+    k1, k2, k3, k4 = st.columns(4)
+
+    k1.metric(
+        "📈 7-Day Forecast Demand",
+        f"{total_forecast_demand:,.0f}"
+    )
+
+    k2.metric(
+        "🛡️ Safety Stock",
+        f"{total_safety_stock:,.0f}"
+    )
+
+    k3.metric(
+        "📦 Recommended Stock",
+        f"{total_recommended_stock:,.0f}"
+    )
+
+    k4.metric(
+        "🔴 High Priority",
+        f"{high_priority_count:,}"
+    )
+
+    # --------------------------------------------------------
+    # PRIORITY DISTRIBUTION
+    # --------------------------------------------------------
+
+    st.subheader(
+        "🚦 Inventory Priority Distribution"
+    )
+
+    priority_distribution = (
+        filtered_inventory[
+            "inventory_priority"
+        ]
+        .value_counts()
+        .rename_axis("Priority")
+        .reset_index(name="Count")
+    )
+
+    st.bar_chart(
+        priority_distribution.set_index(
+            "Priority"
+        )["Count"]
+    )
+
+    # --------------------------------------------------------
+    # RECOMMENDED STOCK BY FAMILY
+    # --------------------------------------------------------
+
+    st.subheader(
+        "📦 Recommended Stock by Product Family"
+    )
+
+    family_inventory = (
+        filtered_inventory
+        .groupby(
+            "family",
+            as_index=False
+        )["recommended_stock"]
+        .sum()
+        .sort_values(
+            "recommended_stock",
+            ascending=False
+        )
+    )
+
+    st.bar_chart(
+        family_inventory.set_index(
+            "family"
+        )["recommended_stock"]
+    )
+
+    # --------------------------------------------------------
+    # RECOMMENDED STOCK BY STORE
+    # --------------------------------------------------------
+
+    st.subheader(
+        "🏪 Recommended Stock by Store"
+    )
+
+    store_inventory = (
+        filtered_inventory
+        .groupby(
+            "store_nbr",
+            as_index=False
+        )["recommended_stock"]
+        .sum()
+        .sort_values(
+            "recommended_stock",
+            ascending=False
+        )
+    )
+
+    st.bar_chart(
+        store_inventory.set_index(
+            "store_nbr"
+        )["recommended_stock"]
+    )
+
+    # --------------------------------------------------------
+    # TOP 10 INVENTORY REQUIREMENTS
+    # --------------------------------------------------------
+
+    st.subheader(
+        "🔥 Top 10 Inventory Requirements"
+    )
+
+    top_inventory = (
+        filtered_inventory
+        .sort_values(
+            "recommended_stock",
+            ascending=False
+        )
+        .head(10)
+        [
+            [
+                "store_nbr",
+                "family",
+                "city",
+                "state",
+                "forecast_7_day",
+                "safety_stock",
+                "reorder_point",
+                "recommended_stock",
+                "inventory_priority"
+            ]
+        ]
+        .copy()
+    )
+
+    numeric_columns = [
+        "forecast_7_day",
+        "safety_stock",
+        "reorder_point",
+        "recommended_stock"
+    ]
+
+    for column in numeric_columns:
+
+        top_inventory[column] = (
+            top_inventory[column]
+            .round(2)
+        )
+
+    st.dataframe(
+        top_inventory,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # --------------------------------------------------------
+    # COMPLETE INVENTORY TABLE
+    # --------------------------------------------------------
+
+    with st.expander(
+        "🔍 View Complete Inventory Recommendations"
+    ):
+
+        st.dataframe(
+            filtered_inventory,
+            use_container_width=True,
+            hide_index=True
+        )
+
+    # --------------------------------------------------------
+    # DOWNLOAD
+    # --------------------------------------------------------
+
+    st.subheader(
+        "📥 Download Inventory Recommendations"
+    )
+
+    inventory_csv = (
+        filtered_inventory
+        .to_csv(index=False)
+    )
+
+    st.download_button(
+        label="⬇️ Download Inventory CSV",
+        data=inventory_csv,
+        file_name="inventory_recommendations.csv",
+        mime="text/csv",
+        key="download_inventory"
+    )
+
+else:
+
+    st.warning(
+        "Inventory recommendation file not found."
+    )
+
+    st.info(
+        f"Expected file:\n{INVENTORY_PATH}"
+    )
 # ============================================================
 # FOOTER
 # ============================================================
