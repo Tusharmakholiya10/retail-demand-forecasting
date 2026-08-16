@@ -51,7 +51,7 @@ Inventory Recommendation
        ↓
 Streamlit Dashboard
 
-  RAW DATA
+                   RAW DATA
                        │
                        ▼
               Data Cleaning
