@@ -487,7 +487,7 @@ fig_family_mae.update_layout(
 
 st.plotly_chart(
     fig_family_mae,
-    use_container_width=True
+    width="stretch"
 )
 
 # ------------------------------------------------------------
@@ -531,7 +531,7 @@ fig_family_sales.update_layout(
 
 st.plotly_chart(
     fig_family_sales,
-    use_container_width=True
+    width="stretch"
 )
 
 # ------------------------------------------------------------
@@ -571,7 +571,7 @@ st.dataframe(
         "Sales Difference": "{:,.0f}",
         "Observations": "{:,.0f}"
     }),
-    use_container_width=True
+    width="stretch"
 )
 
 # ------------------------------------------------------------
@@ -631,7 +631,7 @@ fig_store_mae.update_layout(
 
 st.plotly_chart(
     fig_store_mae,
-    use_container_width=True
+    width="stretch"
 )
 
 # ------------------------------------------------------------
@@ -670,7 +670,7 @@ fig_store_sales.update_layout(
 
 st.plotly_chart(
     fig_store_sales,
-    use_container_width=True
+    width="stretch"
 )
 
 # ------------------------------------------------------------
@@ -710,7 +710,7 @@ st.dataframe(
         "Sales Difference": "{:,.0f}",
         "Observations": "{:,.0f}"
     }),
-    use_container_width=True
+    width="stretch"
 )
 
 # ============================================================
@@ -806,7 +806,7 @@ if not filtered_df.empty:
 
     st.plotly_chart(
         fig_monthly_sales,
-        use_container_width=True
+        width="stretch"
     )
 
     # Monthly MAE
@@ -823,7 +823,7 @@ if not filtered_df.empty:
 
     st.plotly_chart(
         fig_monthly_mae,
-        use_container_width=True
+        width="stretch"
     )
 
     # Monthly WAPE
@@ -841,7 +841,7 @@ if not filtered_df.empty:
 
     st.plotly_chart(
         fig_monthly_wape,
-        use_container_width=True
+        width="stretch"
     )
 
     st.subheader("📋 Monthly Performance Details")
@@ -876,7 +876,7 @@ if not filtered_df.empty:
             "WAPE (%)": "{:.2f}%",
             "Sales Difference": "{:,.0f}"
         }),
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -958,7 +958,7 @@ if not filtered_df.empty:
 
     st.plotly_chart(
         fig_error_distribution,
-        use_container_width=True
+        width="stretch"
     )
 
     # Error over time
@@ -991,7 +991,7 @@ if not filtered_df.empty:
 
     st.plotly_chart(
         fig_error_time,
-        use_container_width=True
+        width="stretch"
     )
 
     # Over vs under prediction
@@ -1015,7 +1015,7 @@ if not filtered_df.empty:
 
     st.plotly_chart(
         fig_direction,
-        use_container_width=True
+        width="stretch"
     )
 
     # Largest errors
@@ -1059,7 +1059,7 @@ if not filtered_df.empty:
             "Absolute Error": "{:,.2f}",
             "Percentage Error": "{:.2f}%"
         }),
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -1098,7 +1098,7 @@ if not filtered_df.empty:
             "Predicted Sales": "{:,.2f}",
             "Over-prediction": "{:,.2f}"
         }),
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -1137,7 +1137,7 @@ if not filtered_df.empty:
             "Predicted Sales": "{:,.2f}",
             "Under-prediction": "{:,.2f}"
         }),
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -1159,7 +1159,7 @@ if store_data is not None:
 
     st.dataframe(
         store_data,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -1186,7 +1186,7 @@ if family_data is not None:
 
     st.dataframe(
         family_data,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -1213,7 +1213,7 @@ if monthly_data is not None:
 
     st.dataframe(
         monthly_data,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -1513,7 +1513,7 @@ if not filtered_df.empty:
             "WAPE (%)": "{:.2f}%",
             "Sales Difference": "{:,.0f}"
         }),
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -1620,7 +1620,7 @@ if comparison_dashboard is not None and not comparison_dashboard.empty:
 
         st.plotly_chart(
             fig_model_metrics,
-            use_container_width=True
+            width="stretch"
         )
 
         # --------------------------------------------
@@ -1711,7 +1711,7 @@ if comparison_dashboard is not None and not comparison_dashboard.empty:
                 "RMSE": "{:,.4f}",
                 "RMSLE": "{:.4f}"
             }),
-            use_container_width=True,
+            width="stretch",
             hide_index=True
         )
 
@@ -1745,7 +1745,7 @@ if metrics is not None:
 
     st.dataframe(
         metrics,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -1771,7 +1771,7 @@ top_errors = filtered_df.sort_values(
 
 st.dataframe(
     top_errors,
-    use_container_width=True,
+    width="stretch",
     hide_index=True
 )
 
@@ -1786,7 +1786,7 @@ with st.expander(
 
     st.dataframe(
         filtered_df,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -2026,7 +2026,7 @@ if os.path.exists(FUTURE_FORECAST_PATH):
 
     st.dataframe(
         top_future,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -2345,7 +2345,7 @@ if os.path.exists(INVENTORY_PATH):
 
     st.dataframe(
         top_inventory,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -2359,7 +2359,7 @@ if os.path.exists(INVENTORY_PATH):
 
         st.dataframe(
             filtered_inventory,
-            use_container_width=True,
+            width="stretch",
             hide_index=True
         )
 

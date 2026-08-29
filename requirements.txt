@@ -10,3 +10,5 @@ kaggle
 joblib
 openpyxl
 lightgbm
+streamlit
+plotly

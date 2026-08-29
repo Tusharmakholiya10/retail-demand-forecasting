@@ -1,48 +1,110 @@
-# Virtual environment
+# ============================================================
+# Virtual environments
+# ============================================================
+
 venv/
 .venv/
 
+
+# ============================================================
 # Python cache
+# ============================================================
+
 __pycache__/
 *.py[cod]
 
-# Environment variables
+
+# ============================================================
+# Environment variables / credentials
+# ============================================================
+
 .env
 .env.*
-
-# Kaggle credentials
 kaggle.json
 
+
+# ============================================================
 # Raw datasets
+# ============================================================
+
 data/raw/*.csv
 data/raw/*.zip
 
+
+# ============================================================
 # Processed datasets
+# ============================================================
+
 data/processed/*.csv
 
+
+# ============================================================
 # Forecast outputs
+# Ignore forecast files by default
+# Only dashboard-required files are allowed below
+# ============================================================
+
 data/forecasts/**/*.csv
 
+# Dashboard data
+!data/forecasts/model_comparison.csv
+!data/forecasts/store_performance.csv
+!data/forecasts/family_performance.csv
+
+!data/forecasts/final_evaluation/final_predictions.csv
+!data/forecasts/final_evaluation/store_performance.csv
+!data/forecasts/final_evaluation/family_performance.csv
+!data/forecasts/final_evaluation/monthly_performance.csv
+!data/forecasts/final_evaluation/overall_metrics.csv
+
+!data/forecasts/future/future_predictions.csv
+!data/forecasts/inventory/inventory_recommendations.csv
+
+
+# ============================================================
 # Trained models
-models/**/*.txt
+# ============================================================
+
 models/**/*.pkl
 models/**/*.joblib
+models/**/*.txt
+models/**/*.json
 
+
+# ============================================================
 # Generated figures
+# ============================================================
+
 reports/figures/**/*.png
 reports/figures/**/*.jpg
 reports/figures/**/*.jpeg
 
+
+# ============================================================
 # Jupyter
+# ============================================================
+
 .ipynb_checkpoints/
 
+
+# ============================================================
 # Logs
+# ============================================================
+
 *.log
 
+
+# ============================================================
 # IDE
+# ============================================================
+
 .vscode/
 .idea/
 
+
+# ============================================================
 # OS
+# ============================================================
+
 Thumbs.db
 .DS_Store
