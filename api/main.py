@@ -1,7 +1,8 @@
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 
 
 # ============================================================
@@ -14,7 +15,7 @@ app = FastAPI(
         "REST API for retail demand forecasts, "
         "inventory recommendations, and model metrics."
     ),
-    version="1.0.0",
+    version="1.1.0",
 )
 
 
@@ -54,7 +55,7 @@ METRICS_PATH = (
 # ============================================================
 
 def load_csv(path: Path) -> pd.DataFrame:
-    """Load a CSV file or raise a clear API error."""
+    """Load a CSV file and return it as a DataFrame."""
 
     if not path.exists():
         raise HTTPException(
@@ -73,21 +74,60 @@ def load_csv(path: Path) -> pd.DataFrame:
 
 
 def dataframe_to_records(df: pd.DataFrame) -> list[dict]:
-    """Convert DataFrame into JSON-safe records."""
+    """Convert DataFrame rows into JSON-safe dictionaries."""
 
     df = df.copy()
 
-    # Convert datetime columns to strings.
+    # Convert datetime columns to readable strings.
     for column in df.columns:
         if pd.api.types.is_datetime64_any_dtype(df[column]):
             df[column] = df[column].dt.strftime("%Y-%m-%d")
 
-    # Replace NaN/inf values with None.
+    # Replace infinite and missing values.
     df = df.replace([float("inf"), float("-inf")], pd.NA)
 
-    return df.astype(object).where(df.notna(), None).to_dict(
-        orient="records"
+    return (
+        df.astype(object)
+        .where(df.notna(), None)
+        .to_dict(orient="records")
     )
+
+
+def filter_dataframe(
+    df: pd.DataFrame,
+    store: Optional[int] = None,
+    family: Optional[str] = None,
+) -> pd.DataFrame:
+    """
+    Apply common store and product-family filters.
+    """
+
+    filtered = df.copy()
+
+    if store is not None:
+        if "store_nbr" not in filtered.columns:
+            raise HTTPException(
+                status_code=500,
+                detail="The dataset does not contain 'store_nbr'.",
+            )
+
+        filtered = filtered[
+            filtered["store_nbr"] == store
+        ]
+
+    if family is not None:
+        if "family" not in filtered.columns:
+            raise HTTPException(
+                status_code=500,
+                detail="The dataset does not contain 'family'.",
+            )
+
+        filtered = filtered[
+            filtered["family"].astype(str).str.upper()
+            == family.upper()
+        ]
+
+    return filtered
 
 
 # ============================================================
@@ -98,18 +138,19 @@ def dataframe_to_records(df: pd.DataFrame) -> list[dict]:
 def root():
     return {
         "message": "Retail Demand Forecasting API is running",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "endpoints": [
             "/forecast",
             "/inventory",
             "/metrics",
             "/health",
+            "/docs",
         ],
     }
 
 
 # ============================================================
-# HEALTH CHECK
+# HEALTH
 # ============================================================
 
 @app.get("/health")
@@ -125,16 +166,40 @@ def health():
 # ============================================================
 
 @app.get("/forecast")
-def get_forecast():
+def get_forecast(
+    store: Optional[int] = Query(
+        default=None,
+        description="Filter by store number.",
+        ge=1,
+    ),
+    family: Optional[str] = Query(
+        default=None,
+        description="Filter by product family.",
+    ),
+):
     """
     Return future demand forecasts.
+
+    Optional filters:
+    - store
+    - family
     """
 
     df = load_csv(FORECAST_PATH)
 
+    filtered = filter_dataframe(
+        df,
+        store=store,
+        family=family,
+    )
+
     return {
-        "count": len(df),
-        "data": dataframe_to_records(df),
+        "count": len(filtered),
+        "filters": {
+            "store": store,
+            "family": family,
+        },
+        "data": dataframe_to_records(filtered),
     }
 
 
@@ -143,16 +208,40 @@ def get_forecast():
 # ============================================================
 
 @app.get("/inventory")
-def get_inventory():
+def get_inventory(
+    store: Optional[int] = Query(
+        default=None,
+        description="Filter by store number.",
+        ge=1,
+    ),
+    family: Optional[str] = Query(
+        default=None,
+        description="Filter by product family.",
+    ),
+):
     """
     Return inventory and reorder recommendations.
+
+    Optional filters:
+    - store
+    - family
     """
 
     df = load_csv(INVENTORY_PATH)
 
+    filtered = filter_dataframe(
+        df,
+        store=store,
+        family=family,
+    )
+
     return {
-        "count": len(df),
-        "data": dataframe_to_records(df),
+        "count": len(filtered),
+        "filters": {
+            "store": store,
+            "family": family,
+        },
+        "data": dataframe_to_records(filtered),
     }
 
 
