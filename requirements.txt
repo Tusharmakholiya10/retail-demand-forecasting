@@ -12,3 +12,5 @@ openpyxl
 lightgbm
 streamlit
 plotly
+fastapi
+uvicorn[standard]
