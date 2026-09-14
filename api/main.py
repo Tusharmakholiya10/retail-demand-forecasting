@@ -7,26 +7,34 @@ from fastapi import FastAPI, HTTPException, Query
 
 
 # ============================================================
-# APP
+# APP CONFIGURATION
 # ============================================================
 
 app = FastAPI(
     title="Retail Demand Forecasting API",
     description=(
-        "REST API for retail demand forecasts, "
-        "inventory recommendations, and model metrics."
+        "FastAPI backend for retail demand forecasting, "
+        "inventory recommendations, model metrics, and metadata."
     ),
-    version="1.1.0",
+    version="1.2.0",
 )
 
 
 # ============================================================
-# PATHS
+# PROJECT PATHS
 # ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-FORECAST_PATH = (
+PREDICTIONS_PATH = (
+    BASE_DIR
+    / "data"
+    / "forecasts"
+    / "final_evaluation"
+    / "final_predictions.csv"
+)
+
+FUTURE_FORECAST_PATH = (
     BASE_DIR
     / "data"
     / "forecasts"
@@ -42,7 +50,38 @@ INVENTORY_PATH = (
     / "inventory_recommendations.csv"
 )
 
-METRICS_PATH = (
+MODEL_COMPARISON_PATH = (
+    BASE_DIR
+    / "data"
+    / "forecasts"
+    / "model_comparison.csv"
+)
+
+STORE_PERFORMANCE_PATH = (
+    BASE_DIR
+    / "data"
+    / "forecasts"
+    / "final_evaluation"
+    / "store_performance.csv"
+)
+
+FAMILY_PERFORMANCE_PATH = (
+    BASE_DIR
+    / "data"
+    / "forecasts"
+    / "final_evaluation"
+    / "family_performance.csv"
+)
+
+MONTHLY_PERFORMANCE_PATH = (
+    BASE_DIR
+    / "data"
+    / "forecasts"
+    / "final_evaluation"
+    / "monthly_performance.csv"
+)
+
+OVERALL_METRICS_PATH = (
     BASE_DIR
     / "data"
     / "forecasts"
@@ -52,16 +91,20 @@ METRICS_PATH = (
 
 
 # ============================================================
-# HELPERS
+# HELPER FUNCTIONS
 # ============================================================
 
 def load_csv(path: Path) -> pd.DataFrame:
-    """Load a CSV file and provide a clear API error if unavailable."""
+    """
+    Load a CSV file and return it as a pandas DataFrame.
+    Raise a clear API error if the file does not exist or cannot
+    be read.
+    """
 
     if not path.exists():
         raise HTTPException(
             status_code=404,
-            detail=f"Data file not found: {path}",
+            detail=f"Data file not found: {path}"
         )
 
     try:
@@ -70,26 +113,8 @@ def load_csv(path: Path) -> pd.DataFrame:
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"Unable to read data file: {exc}",
+            detail=f"Unable to read data file: {exc}"
         )
-
-
-def dataframe_to_records(df: pd.DataFrame) -> list[dict]:
-    """Convert a DataFrame into JSON-safe records."""
-
-    df = df.copy()
-
-    for column in df.columns:
-        if pd.api.types.is_datetime64_any_dtype(df[column]):
-            df[column] = df[column].dt.strftime("%Y-%m-%d")
-
-    df = df.replace([float("inf"), float("-inf")], pd.NA)
-
-    return (
-        df.astype(object)
-        .where(df.notna(), None)
-        .to_dict(orient="records")
-    )
 
 
 def apply_filters(
@@ -100,10 +125,7 @@ def apply_filters(
     date_to: Optional[date] = None,
 ) -> pd.DataFrame:
     """
-    Apply common store, family and date filters.
-
-    The function checks which columns actually exist in the
-    dataset so the API remains robust to small schema differences.
+    Apply optional store, family, and date filters.
     """
 
     result = df.copy()
@@ -117,13 +139,18 @@ def apply_filters(
         if "store_nbr" not in result.columns:
             raise HTTPException(
                 status_code=400,
-                detail="Store filtering is not available for this dataset.",
+                detail="store_nbr column is not available in this dataset."
             )
+
+        result["store_nbr"] = pd.to_numeric(
+            result["store_nbr"],
+            errors="coerce"
+        )
 
         result = result[result["store_nbr"] == store]
 
     # --------------------------------------------------------
-    # Product family filter
+    # Family filter
     # --------------------------------------------------------
 
     if family is not None:
@@ -131,7 +158,7 @@ def apply_filters(
         if "family" not in result.columns:
             raise HTTPException(
                 status_code=400,
-                detail="Family filtering is not available for this dataset.",
+                detail="family column is not available in this dataset."
             )
 
         result = result[
@@ -148,12 +175,12 @@ def apply_filters(
         if "date" not in result.columns:
             raise HTTPException(
                 status_code=400,
-                detail="Date filtering is not available for this dataset.",
+                detail="date column is not available in this dataset."
             )
 
         result["date"] = pd.to_datetime(
             result["date"],
-            errors="coerce",
+            errors="coerce"
         )
 
         if date_from is not None:
@@ -169,78 +196,112 @@ def apply_filters(
     return result
 
 
+def prepare_dataframe_for_json(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Convert pandas-specific values into JSON-safe values.
+    """
+
+    result = df.copy()
+
+    # Convert datetime columns to YYYY-MM-DD strings
+    for column in result.columns:
+
+        if pd.api.types.is_datetime64_any_dtype(result[column]):
+            result[column] = result[column].dt.strftime("%Y-%m-%d")
+
+    # Replace NaN / inf values with None
+    result = result.astype(object).where(
+        pd.notna(result),
+        None
+    )
+
+    return result
+
+
 # ============================================================
-# ROOT
+# ROOT ENDPOINT
 # ============================================================
 
 @app.get("/")
 def root():
+    """
+    Basic API information.
+    """
+
     return {
-        "message": "Retail Demand Forecasting API is running",
-        "version": app.version,
+        "name": "Retail Demand Forecasting API",
+        "version": "1.2.0",
+        "status": "running",
+        "docs": "/docs",
         "endpoints": [
             "/health",
             "/forecast",
             "/inventory",
+            "/stores",
+            "/families",
+            "/models",
             "/metrics",
         ],
-        "documentation": "/docs",
     }
 
 
 # ============================================================
-# HEALTH
+# HEALTH CHECK
 # ============================================================
 
 @app.get("/health")
-def health():
+def health_check():
+    """
+    Check whether the API is running.
+    """
+
     return {
         "status": "healthy",
-        "service": "retail-demand-forecasting-api",
-        "version": app.version,
+        "service": "Retail Demand Forecasting API",
+        "version": "1.2.0",
     }
 
 
 # ============================================================
-# FORECAST
+# FORECAST ENDPOINT
 # ============================================================
 
 @app.get("/forecast")
 def get_forecast(
     store: Optional[int] = Query(
         default=None,
-        description="Store number",
+        description="Filter by store number"
     ),
+
     family: Optional[str] = Query(
         default=None,
-        description="Product family",
+        description="Filter by product family"
     ),
+
     date_from: Optional[date] = Query(
         default=None,
-        description="Start date (YYYY-MM-DD)",
+        description="Start date, inclusive"
     ),
+
     date_to: Optional[date] = Query(
         default=None,
-        description="End date (YYYY-MM-DD)",
+        description="End date, inclusive"
     ),
+
     limit: int = Query(
         default=1000,
         ge=1,
         le=50000,
-        description="Maximum number of records to return",
+        description="Maximum number of records to return"
     ),
 ):
     """
-    Return future demand forecasts.
-
-    Optional filters:
-    - store
-    - family
-    - date_from
-    - date_to
+    Return historical forecast predictions with optional filters.
     """
 
-    df = load_csv(FORECAST_PATH)
+    df = load_csv(PREDICTIONS_PATH)
+
+    total_matches_before_filtering = len(df)
 
     df = apply_filters(
         df=df,
@@ -252,15 +313,28 @@ def get_forecast(
 
     total_matches = len(df)
 
-    # Sort by date when available.
+    # Sort by date if available
     if "date" in df.columns:
+
         df["date"] = pd.to_datetime(
             df["date"],
-            errors="coerce",
+            errors="coerce"
         )
-        df = df.sort_values("date")
 
+        sort_columns = ["date"]
+
+        if "store_nbr" in df.columns:
+            sort_columns.append("store_nbr")
+
+        if "family" in df.columns:
+            sort_columns.append("family")
+
+        df = df.sort_values(sort_columns)
+
+    # Apply limit AFTER filtering
     df = df.head(limit)
+
+    df = prepare_dataframe_for_json(df)
 
     return {
         "count": len(df),
@@ -269,50 +343,56 @@ def get_forecast(
         "filters": {
             "store": store,
             "family": family,
-            "date_from": date_from,
-            "date_to": date_to,
+            "date_from": (
+                date_from.isoformat()
+                if date_from
+                else None
+            ),
+            "date_to": (
+                date_to.isoformat()
+                if date_to
+                else None
+            ),
         },
-        "data": dataframe_to_records(df),
+        "data": df.to_dict(orient="records"),
     }
 
 
 # ============================================================
-# INVENTORY
+# INVENTORY ENDPOINT
 # ============================================================
 
 @app.get("/inventory")
 def get_inventory(
     store: Optional[int] = Query(
         default=None,
-        description="Store number",
+        description="Filter by store number"
     ),
+
     family: Optional[str] = Query(
         default=None,
-        description="Product family",
+        description="Filter by product family"
     ),
+
     date_from: Optional[date] = Query(
         default=None,
-        description="Start date (YYYY-MM-DD)",
+        description="Start date, inclusive"
     ),
+
     date_to: Optional[date] = Query(
         default=None,
-        description="End date (YYYY-MM-DD)",
+        description="End date, inclusive"
     ),
+
     limit: int = Query(
         default=1000,
         ge=1,
         le=50000,
-        description="Maximum number of records to return",
+        description="Maximum number of records to return"
     ),
 ):
     """
-    Return inventory and reorder recommendations.
-
-    Optional filters:
-    - store
-    - family
-    - date_from
-    - date_to
+    Return inventory recommendations with optional filters.
     """
 
     df = load_csv(INVENTORY_PATH)
@@ -327,14 +407,28 @@ def get_inventory(
 
     total_matches = len(df)
 
+    # Sort by date if available
     if "date" in df.columns:
+
         df["date"] = pd.to_datetime(
             df["date"],
-            errors="coerce",
+            errors="coerce"
         )
-        df = df.sort_values("date")
 
+        sort_columns = ["date"]
+
+        if "store_nbr" in df.columns:
+            sort_columns.append("store_nbr")
+
+        if "family" in df.columns:
+            sort_columns.append("family")
+
+        df = df.sort_values(sort_columns)
+
+    # Apply limit
     df = df.head(limit)
+
+    df = prepare_dataframe_for_json(df)
 
     return {
         "count": len(df),
@@ -343,26 +437,125 @@ def get_inventory(
         "filters": {
             "store": store,
             "family": family,
-            "date_from": date_from,
-            "date_to": date_to,
+            "date_from": (
+                date_from.isoformat()
+                if date_from
+                else None
+            ),
+            "date_to": (
+                date_to.isoformat()
+                if date_to
+                else None
+            ),
         },
-        "data": dataframe_to_records(df),
+        "data": df.to_dict(orient="records"),
     }
 
 
 # ============================================================
-# METRICS
+# STORES ENDPOINT
+# ============================================================
+
+@app.get("/stores")
+def get_stores():
+    """
+    Return all available store numbers.
+    """
+
+    df = load_csv(PREDICTIONS_PATH)
+
+    if "store_nbr" not in df.columns:
+        raise HTTPException(
+            status_code=500,
+            detail="store_nbr column not found in forecast data."
+        )
+
+    stores = (
+        pd.to_numeric(
+            df["store_nbr"],
+            errors="coerce"
+        )
+        .dropna()
+        .astype(int)
+        .drop_duplicates()
+        .sort_values()
+        .tolist()
+    )
+
+    return {
+        "count": len(stores),
+        "stores": stores,
+    }
+
+
+# ============================================================
+# FAMILIES ENDPOINT
+# ============================================================
+
+@app.get("/families")
+def get_families():
+    """
+    Return all available product families.
+    """
+
+    df = load_csv(PREDICTIONS_PATH)
+
+    if "family" not in df.columns:
+        raise HTTPException(
+            status_code=500,
+            detail="family column not found in forecast data."
+        )
+
+    families = (
+        df["family"]
+        .dropna()
+        .astype(str)
+        .drop_duplicates()
+        .sort_values()
+        .tolist()
+    )
+
+    return {
+        "count": len(families),
+        "families": families,
+    }
+
+
+# ============================================================
+# MODELS ENDPOINT
+# ============================================================
+
+@app.get("/models")
+def get_models():
+    """
+    Return model comparison results.
+    """
+
+    df = load_csv(MODEL_COMPARISON_PATH)
+
+    df = prepare_dataframe_for_json(df)
+
+    return {
+        "count": len(df),
+        "data": df.to_dict(orient="records"),
+    }
+
+
+# ============================================================
+# METRICS ENDPOINT
 # ============================================================
 
 @app.get("/metrics")
 def get_metrics():
     """
-    Return final model evaluation metrics.
+    Return overall model evaluation metrics.
     """
 
-    df = load_csv(METRICS_PATH)
+    df = load_csv(OVERALL_METRICS_PATH)
+
+    df = prepare_dataframe_for_json(df)
 
     return {
         "count": len(df),
-        "data": dataframe_to_records(df),
+        "data": df.to_dict(orient="records"),
     }
