@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Retail Demand Forecasting</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- HEADER -->
+    <header class="header">
+
+        <div>
+            <h1>Retail Demand Forecasting</h1>
+            <p>AI-powered demand forecasting & inventory intelligence</p>
+        </div>
+
+        <div id="api-status" class="status">
+            Checking API...
+        </div>
+
+    </header>
+
+
+    <main class="container">
+
+        <!-- TITLE -->
+        <section class="page-title">
+
+            <h2>Demand Forecasting Dashboard</h2>
+
+            <p>
+                Analyze historical demand, evaluate model performance,
+                and make data-driven inventory decisions.
+            </p>
+
+        </section>
+
+
+        <!-- KPI CARDS -->
+        <section class="kpi-grid">
+
+            <div class="kpi-card">
+
+                <span class="kpi-label">
+                    Total Stores
+                </span>
+
+                <strong id="store-count">
+                    --
+                </strong>
+
+            </div>
+
+
+            <div class="kpi-card">
+
+                <span class="kpi-label">
+                    Product Families
+                </span>
+
+                <strong id="family-count">
+                    --
+                </strong>
+
+            </div>
+
+
+            <div class="kpi-card">
+
+                <span class="kpi-label">
+                    Best Model
+                </span>
+
+                <strong id="best-model">
+                    --
+                </strong>
+
+            </div>
+
+
+            <div class="kpi-card">
+
+                <span class="kpi-label">
+                    API Status
+                </span>
+
+                <strong id="api-kpi">
+                    --
+                </strong>
+
+            </div>
+
+        </section>
+
+
+        <!-- MODEL METRICS -->
+        <section class="card">
+
+            <div class="section-header">
+
+                <div>
+                    <h3>Model Performance</h3>
+
+                    <p>
+                        Performance metrics from the trained forecasting models.
+                    </p>
+                </div>
+
+            </div>
+
+
+            <div class="table-container">
+
+                <table>
+
+                    <thead>
+                        <tr id="metrics-header"></tr>
+                    </thead>
+
+                    <tbody id="metrics-body"></tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+
+        <!-- DATASET INFORMATION -->
+        <section class="card">
+
+            <div class="section-header">
+
+                <div>
+                    <h3>Dataset Overview</h3>
+
+                    <p>
+                        Available stores and product families in the forecasting dataset.
+                    </p>
+                </div>
+
+            </div>
+
+
+            <div class="dataset-grid">
+
+                <div class="dataset-box">
+
+                    <h4>Stores</h4>
+
+                    <div id="stores-list" class="tag-container">
+                        Loading...
+                    </div>
+
+                </div>
+
+
+                <div class="dataset-box">
+
+                    <h4>Product Families</h4>
+
+                    <div id="families-list" class="tag-container">
+                        Loading...
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- STATUS -->
+        <section class="card status-card">
+
+            <h3>System Status</h3>
+
+            <p id="system-message">
+                Connecting to forecasting API...
+            </p>
+
+        </section>
+
+    </main>
+
+
+    <footer>
+
+        <p>
+            Retail Demand Forecasting System
+        </p>
+
+        <p>
+            FastAPI + JavaScript
+        </p>
+
+    </footer>
+
+
+    <script src="app.js"></script>
+
+</body>
+
+</html>
