@@ -2,48 +2,85 @@
 <html lang="en">
 
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
     <title>Retail Demand Forecasting</title>
 
     <link rel="stylesheet" href="style.css">
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+
 </head>
+
 
 <body>
 
-    <!-- HEADER -->
+
+    <!-- =========================
+         HEADER
+    ========================== -->
+
     <header class="header">
 
         <div>
-            <h1>Retail Demand Forecasting</h1>
-            <p>AI-powered demand forecasting & inventory intelligence</p>
+
+            <h1>
+                Retail Demand Forecasting
+            </h1>
+
+            <p>
+                AI-powered demand forecasting & inventory intelligence
+            </p>
+
         </div>
 
-        <div id="api-status" class="status">
+
+        <div
+            id="api-status"
+            class="status"
+        >
             Checking API...
         </div>
 
     </header>
 
 
+
     <main class="container">
 
-        <!-- TITLE -->
+
+        <!-- =========================
+             PAGE TITLE
+        ========================== -->
+
         <section class="page-title">
 
-            <h2>Demand Forecasting Dashboard</h2>
+            <h2>
+                Demand Forecasting Dashboard
+            </h2>
 
             <p>
-                Analyze historical demand, evaluate model performance,
-                and make data-driven inventory decisions.
+                Analyze historical demand, compare predictions,
+                and explore forecast performance.
             </p>
 
         </section>
 
 
-        <!-- KPI CARDS -->
+
+        <!-- =========================
+             KPI CARDS
+        ========================== -->
+
         <section class="kpi-grid">
+
 
             <div class="kpi-card">
 
@@ -96,21 +133,297 @@
 
             </div>
 
+
         </section>
 
 
-        <!-- MODEL METRICS -->
+
+        <!-- =========================
+             FILTERS
+        ========================== -->
+
         <section class="card">
 
             <div class="section-header">
 
-                <div>
-                    <h3>Model Performance</h3>
+                <h3>
+                    Forecast Filters
+                </h3>
 
-                    <p>
-                        Performance metrics from the trained forecasting models.
-                    </p>
+                <p>
+                    Select a store, product family, and date range.
+                </p>
+
+            </div>
+
+
+            <div class="filter-grid">
+
+
+                <!-- Store -->
+
+                <div class="filter-group">
+
+                    <label for="store-filter">
+                        Store
+                    </label>
+
+                    <select id="store-filter">
+
+                        <option value="">
+                            All Stores
+                        </option>
+
+                    </select>
+
                 </div>
+
+
+
+                <!-- Family -->
+
+                <div class="filter-group">
+
+                    <label for="family-filter">
+                        Product Family
+                    </label>
+
+                    <select id="family-filter">
+
+                        <option value="">
+                            All Families
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+
+                <!-- Date From -->
+
+                <div class="filter-group">
+
+                    <label for="date-from">
+                        Date From
+                    </label>
+
+                    <input
+                        type="date"
+                        id="date-from"
+                    >
+
+                </div>
+
+
+
+                <!-- Date To -->
+
+                <div class="filter-group">
+
+                    <label for="date-to">
+                        Date To
+                    </label>
+
+                    <input
+                        type="date"
+                        id="date-to"
+                    >
+
+                </div>
+
+
+            </div>
+
+
+
+            <div class="filter-actions">
+
+                <button
+                    id="apply-filters"
+                    class="primary-button"
+                >
+                    Apply Filters
+                </button>
+
+
+                <button
+                    id="reset-filters"
+                    class="secondary-button"
+                >
+                    Reset
+                </button>
+
+            </div>
+
+
+            <p
+                id="filter-message"
+                class="filter-message"
+            ></p>
+
+
+        </section>
+
+
+
+        <!-- =========================
+             FORECAST KPIs
+        ========================== -->
+
+        <section class="forecast-kpi-grid">
+
+
+            <div class="small-kpi">
+
+                <span>
+                    Records
+                </span>
+
+                <strong id="forecast-records">
+                    --
+                </strong>
+
+            </div>
+
+
+            <div class="small-kpi">
+
+                <span>
+                    Total Actual
+                </span>
+
+                <strong id="total-actual">
+                    --
+                </strong>
+
+            </div>
+
+
+            <div class="small-kpi">
+
+                <span>
+                    Total Predicted
+                </span>
+
+                <strong id="total-predicted">
+                    --
+                </strong>
+
+            </div>
+
+
+            <div class="small-kpi">
+
+                <span>
+                    Avg Actual
+                </span>
+
+                <strong id="avg-actual">
+                    --
+                </strong>
+
+            </div>
+
+
+            <div class="small-kpi">
+
+                <span>
+                    Avg Predicted
+                </span>
+
+                <strong id="avg-predicted">
+                    --
+                </strong>
+
+            </div>
+
+
+        </section>
+
+
+
+        <!-- =========================
+             FORECAST CHART
+        ========================== -->
+
+        <section class="card">
+
+            <div class="section-header">
+
+                <h3>
+                    Actual vs Predicted Demand
+                </h3>
+
+                <p>
+                    Compare actual demand with model predictions.
+                </p>
+
+            </div>
+
+
+            <div
+                id="forecast-chart"
+                class="chart"
+            ></div>
+
+
+        </section>
+
+
+
+        <!-- =========================
+             FORECAST TABLE
+        ========================== -->
+
+        <section class="card">
+
+            <div class="section-header">
+
+                <h3>
+                    Forecast Data
+                </h3>
+
+                <p>
+                    Forecast records returned by the FastAPI backend.
+                </p>
+
+            </div>
+
+
+            <div class="table-container">
+
+                <table>
+
+                    <thead id="forecast-table-head">
+                    </thead>
+
+                    <tbody id="forecast-table-body">
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+
+
+        <!-- =========================
+             MODEL PERFORMANCE
+        ========================== -->
+
+        <section class="card">
+
+            <div class="section-header">
+
+                <h3>
+                    Model Performance
+                </h3>
+
+                <p>
+                    Performance comparison of forecasting models.
+                </p>
 
             </div>
 
@@ -120,10 +433,14 @@
                 <table>
 
                     <thead>
-                        <tr id="metrics-header"></tr>
+
+                        <tr id="metrics-header">
+                        </tr>
+
                     </thead>
 
-                    <tbody id="metrics-body"></tbody>
+                    <tbody id="metrics-body">
+                    </tbody>
 
                 </table>
 
@@ -132,54 +449,77 @@
         </section>
 
 
-        <!-- DATASET INFORMATION -->
+
+        <!-- =========================
+             DATASET OVERVIEW
+        ========================== -->
+
         <section class="card">
 
             <div class="section-header">
 
-                <div>
-                    <h3>Dataset Overview</h3>
+                <h3>
+                    Dataset Overview
+                </h3>
 
-                    <p>
-                        Available stores and product families in the forecasting dataset.
-                    </p>
-                </div>
+                <p>
+                    Available stores and product families.
+                </p>
 
             </div>
 
 
             <div class="dataset-grid">
 
+
                 <div class="dataset-box">
 
-                    <h4>Stores</h4>
+                    <h4>
+                        Stores
+                    </h4>
 
-                    <div id="stores-list" class="tag-container">
+                    <div
+                        id="stores-list"
+                        class="tag-container"
+                    >
                         Loading...
                     </div>
 
                 </div>
 
 
+
                 <div class="dataset-box">
 
-                    <h4>Product Families</h4>
+                    <h4>
+                        Product Families
+                    </h4>
 
-                    <div id="families-list" class="tag-container">
+                    <div
+                        id="families-list"
+                        class="tag-container"
+                    >
                         Loading...
                     </div>
 
                 </div>
+
 
             </div>
 
         </section>
 
 
-        <!-- STATUS -->
+
+        <!-- =========================
+             SYSTEM STATUS
+        ========================== -->
+
         <section class="card status-card">
 
-            <h3>System Status</h3>
+            <h3>
+                System Status
+            </h3>
 
             <p id="system-message">
                 Connecting to forecasting API...
@@ -187,7 +527,9 @@
 
         </section>
 
+
     </main>
+
 
 
     <footer>
@@ -197,10 +539,11 @@
         </p>
 
         <p>
-            FastAPI + JavaScript
+            FastAPI + JavaScript + Plotly
         </p>
 
     </footer>
+
 
 
     <script src="app.js"></script>
