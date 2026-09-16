@@ -1,1402 +1,1042 @@
-const API_BASE_URL = "http://127.0.0.1:8000";
+/* =========================================================
+   RETAIL DEMAND FORECASTING DASHBOARD
+========================================================= */
+
+const API_BASE = "http://127.0.0.1:8000";
+
+let inventoryData = [];
+let forecastData = [];
 
 
-/* =========================
-   DOM ELEMENTS
-========================= */
+/* =========================================================
+   HELPERS
+========================================================= */
 
-const apiStatus =
-    document.getElementById("api-status");
+function formatNumber(value, decimals = 2) {
 
-const storeCount =
-    document.getElementById("store-count");
+    const number = Number(value);
 
-const familyCount =
-    document.getElementById("family-count");
+    if (!Number.isFinite(number)) {
+        return "--";
+    }
 
-const bestModel =
-    document.getElementById("best-model");
-
-const apiKpi =
-    document.getElementById("api-kpi");
-
-const metricsHeader =
-    document.getElementById("metrics-header");
-
-const metricsBody =
-    document.getElementById("metrics-body");
-
-const storesList =
-    document.getElementById("stores-list");
-
-const familiesList =
-    document.getElementById("families-list");
-
-const systemMessage =
-    document.getElementById("system-message");
+    return number.toLocaleString(
+        "en-US",
+        {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals
+        }
+    );
+}
 
 
-const storeFilter =
-    document.getElementById("store-filter");
+function escapeHtml(value) {
 
-const familyFilter =
-    document.getElementById("family-filter");
+    if (value === null || value === undefined) {
+        return "";
+    }
 
-const dateFrom =
-    document.getElementById("date-from");
-
-const dateTo =
-    document.getElementById("date-to");
-
-const applyFiltersButton =
-    document.getElementById("apply-filters");
-
-const resetFiltersButton =
-    document.getElementById("reset-filters");
-
-const filterMessage =
-    document.getElementById("filter-message");
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
 
 
-const forecastRecords =
-    document.getElementById("forecast-records");
+async function fetchJSON(endpoint) {
 
-const totalActual =
-    document.getElementById("total-actual");
-
-const totalPredicted =
-    document.getElementById("total-predicted");
-
-const avgActual =
-    document.getElementById("avg-actual");
-
-const avgPredicted =
-    document.getElementById("avg-predicted");
-
-const forecastTableHead =
-    document.getElementById("forecast-table-head");
-
-const forecastTableBody =
-    document.getElementById("forecast-table-body");
-
-
-/* =========================
-   API HELPER
-========================= */
-
-async function fetchAPI(endpoint) {
-
-    const response =
-        await fetch(`${API_BASE_URL}${endpoint}`);
-
+    const response = await fetch(
+        `${API_BASE}${endpoint}`
+    );
 
     if (!response.ok) {
 
         throw new Error(
             `API request failed: ${response.status}`
         );
-
     }
-
 
     return await response.json();
-
 }
 
 
-/* =========================
-   HEALTH
-========================= */
+/* =========================================================
+   API STATUS
+========================================================= */
 
-async function loadHealth() {
+async function checkAPI() {
+
+    const statusText =
+        document.getElementById("apiStatus");
+
+    const statusKpi =
+        document.getElementById("apiKpi");
+
+    const dot =
+        document.getElementById("statusDot");
 
     try {
 
-        const data =
-            await fetchAPI("/health");
+        await fetchJSON("/health");
+
+        statusText.textContent = "Online";
+
+        statusKpi.textContent = "Online";
+
+        dot.classList.remove("offline");
+
+        dot.classList.add("online");
+
+    } catch (error) {
+
+        statusText.textContent = "Offline";
+
+        statusKpi.textContent = "Offline";
+
+        dot.classList.remove("online");
+
+        dot.classList.add("offline");
+
+        console.error(
+            "API health check failed:",
+            error
+        );
+    }
+}
 
 
-        apiStatus.textContent =
-            "API Online";
+/* =========================================================
+   OVERVIEW
+========================================================= */
+
+async function loadOverview() {
+
+    try {
+
+        const [
+            stores,
+            families,
+            models
+        ] = await Promise.all([
+            fetchJSON("/stores"),
+            fetchJSON("/families"),
+            fetchJSON("/models")
+        ]);
 
 
-        apiKpi.textContent =
-            "Online";
+        document.getElementById(
+            "totalStores"
+        ).textContent = stores.count;
 
 
-        systemMessage.textContent =
-            `${data.service} is running successfully.`;
+        document.getElementById(
+            "totalFamilies"
+        ).textContent = families.count;
 
+
+        populateSelect(
+            "forecastStore",
+            stores.stores,
+            "All Stores"
+        );
+
+        populateSelect(
+            "inventoryStore",
+            stores.stores,
+            "All Stores"
+        );
+
+
+        populateSelect(
+            "forecastFamily",
+            families.families,
+            "All Families"
+        );
+
+        populateSelect(
+            "inventoryFamily",
+            families.families,
+            "All Families"
+        );
+
+
+        renderModels(models.data);
 
     } catch (error) {
 
         console.error(
-            "Health check failed:",
+            "Overview loading failed:",
             error
         );
+    }
+}
 
 
-        apiStatus.textContent =
-            "API Offline";
+/* =========================================================
+   SELECT POPULATION
+========================================================= */
 
+function populateSelect(
+    elementId,
+    values,
+    defaultText
+) {
 
-        apiKpi.textContent =
-            "Offline";
+    const select =
+        document.getElementById(elementId);
 
-
-        systemMessage.textContent =
-            "Unable to connect to FastAPI.";
-
+    if (!select) {
+        return;
     }
 
+    select.innerHTML = "";
+
+    const defaultOption =
+        document.createElement("option");
+
+    defaultOption.value = "";
+
+    defaultOption.textContent = defaultText;
+
+    select.appendChild(defaultOption);
+
+
+    values.forEach(value => {
+
+        const option =
+            document.createElement("option");
+
+        option.value = value;
+
+        option.textContent = value;
+
+        select.appendChild(option);
+
+    });
 }
 
 
-/* =========================
-   LOAD STORES
-========================= */
+/* =========================================================
+   MODEL PERFORMANCE
+========================================================= */
 
-async function loadStores() {
+function renderModels(models) {
 
-    try {
-
-        const data =
-            await fetchAPI("/stores");
-
-
-        storeCount.textContent =
-            data.count;
-
-
-        storeFilter.innerHTML =
-            `<option value="">All Stores</option>`;
-
-
-        storesList.innerHTML =
-            "";
-
-
-        data.stores.forEach(store => {
-
-
-            const option =
-                document.createElement("option");
-
-
-            option.value =
-                store;
-
-
-            option.textContent =
-                `Store ${store}`;
-
-
-            storeFilter.appendChild(
-                option
-            );
-
-
-            const tag =
-                document.createElement("span");
-
-
-            tag.className =
-                "tag";
-
-
-            tag.textContent =
-                `Store ${store}`;
-
-
-            storesList.appendChild(
-                tag
-            );
-
-        });
-
-
-    } catch (error) {
-
-        console.error(
-            "Failed to load stores:",
-            error
+    const body =
+        document.getElementById(
+            "modelTableBody"
         );
 
+    if (!models || models.length === 0) {
 
-        storeCount.textContent =
+        body.innerHTML = `
+            <tr>
+                <td colspan="5" class="empty">
+                    No model performance data available.
+                </td>
+            </tr>
+        `;
+
+        return;
+    }
+
+
+    body.innerHTML = models.map(model => {
+
+        const modelName =
+            model.model ||
+            model.Model ||
+            model.name ||
+            model.model_name ||
             "--";
 
-    }
 
-}
-
-
-/* =========================
-   LOAD FAMILIES
-========================= */
-
-async function loadFamilies() {
-
-    try {
-
-        const data =
-            await fetchAPI("/families");
-
-
-        familyCount.textContent =
-            data.count;
-
-
-        familyFilter.innerHTML =
-            `<option value="">All Families</option>`;
-
-
-        familiesList.innerHTML =
-            "";
-
-
-        data.families.forEach(family => {
-
-
-            const option =
-                document.createElement("option");
-
-
-            option.value =
-                family;
-
-
-            option.textContent =
-                family;
-
-
-            familyFilter.appendChild(
-                option
-            );
-
-
-            const tag =
-                document.createElement("span");
-
-
-            tag.className =
-                "tag";
-
-
-            tag.textContent =
-                family;
-
-
-            familiesList.appendChild(
-                tag
-            );
-
-        });
-
-
-    } catch (error) {
-
-        console.error(
-            "Failed to load families:",
-            error
-        );
-
-
-        familyCount.textContent =
+        const mae =
+            model.MAE ??
+            model.mae ??
             "--";
 
-    }
 
-}
+        const rmse =
+            model.RMSE ??
+            model.rmse ??
+            "--";
 
 
-/* =========================
-   LOAD MODEL DATA
-========================= */
+        const rmsle =
+            model.RMSLE ??
+            model.rmsle ??
+            "--";
 
-async function loadMetrics() {
 
-    try {
+        const wape =
+            model.WAPE ??
+            model.wape ??
+            "--";
 
-        const data =
-            await fetchAPI("/models");
 
+        return `
+            <tr>
+                <td>
+                    <strong>
+                        ${escapeHtml(modelName)}
+                    </strong>
+                </td>
+
+                <td>${formatNumber(mae)}</td>
+
+                <td>${formatNumber(rmse)}</td>
+
+                <td>${formatNumber(rmsle)}</td>
+
+                <td>${formatNumber(wape)}%</td>
+            </tr>
+        `;
+
+    }).join("");
+
+
+    /*
+       Find the model with the lowest MAE.
+    */
+
+    let bestModel = null;
+
+    let bestMAE = Infinity;
+
+
+    models.forEach(model => {
+
+        const mae =
+            Number(
+                model.MAE ??
+                model.mae
+            );
 
         if (
-            !data.data ||
-            data.data.length === 0
+            Number.isFinite(mae) &&
+            mae < bestMAE
         ) {
 
-            metricsBody.innerHTML =
-                `<tr>
-                    <td colspan="10">
-                        No model data available.
-                    </td>
-                </tr>`;
+            bestMAE = mae;
 
-            return;
-
-        }
-
-
-        const columns =
-            Object.keys(
-                data.data[0]
-            );
-
-
-        metricsHeader.innerHTML =
-            "";
-
-
-        columns.forEach(column => {
-
-            const th =
-                document.createElement("th");
-
-
-            th.textContent =
-                formatColumnName(column);
-
-
-            metricsHeader.appendChild(
-                th
-            );
-
-        });
-
-
-        metricsBody.innerHTML =
-            "";
-
-
-        data.data.forEach(row => {
-
-            const tr =
-                document.createElement("tr");
-
-
-            columns.forEach(column => {
-
-                const td =
-                    document.createElement("td");
-
-
-                td.textContent =
-                    formatValue(
-                        row[column]
-                    );
-
-
-                tr.appendChild(td);
-
-            });
-
-
-            metricsBody.appendChild(tr);
-
-        });
-
-
-        const modelColumn =
-            findColumn(
-                columns,
-                [
-                    "model",
-                    "model_name",
-                    "algorithm"
-                ]
-            );
-
-
-        if (modelColumn) {
-
-            bestModel.textContent =
-                data.data[0][modelColumn];
+            bestModel =
+                model.model ||
+                model.Model ||
+                model.name ||
+                model.model_name;
 
         }
 
+    });
 
-    } catch (error) {
 
-        console.error(
-            "Failed to load model data:",
-            error
-        );
+    if (bestModel) {
+
+        document.getElementById(
+            "bestModel"
+        ).textContent = bestModel;
 
     }
 
 }
 
 
-/* =========================
-   LOAD FORECAST
-========================= */
+/* =========================================================
+   FORECAST
+========================================================= */
 
 async function loadForecast() {
 
+    const body =
+        document.getElementById(
+            "forecastTableBody"
+        );
+
+    body.innerHTML = `
+        <tr>
+            <td colspan="6" class="loading">
+                Loading forecasts...
+            </td>
+        </tr>
+    `;
+
+
+    const store =
+        document.getElementById(
+            "forecastStore"
+        ).value;
+
+
+    const family =
+        document.getElementById(
+            "forecastFamily"
+        ).value;
+
+
+    const dateFrom =
+        document.getElementById(
+            "dateFrom"
+        ).value;
+
+
+    const dateTo =
+        document.getElementById(
+            "dateTo"
+        ).value;
+
+
+    const params =
+        new URLSearchParams();
+
+
+    params.set("limit", "50000");
+
+
+    if (store) {
+        params.set("store", store);
+    }
+
+    if (family) {
+        params.set("family", family);
+    }
+
+    if (dateFrom) {
+        params.set("date_from", dateFrom);
+    }
+
+    if (dateTo) {
+        params.set("date_to", dateTo);
+    }
+
+
     try {
 
-        filterMessage.textContent =
-            "Loading forecast data...";
-
-
-        const params =
-            new URLSearchParams();
-
-
-        const store =
-            storeFilter.value;
-
-
-        const family =
-            familyFilter.value;
-
-
-        const from =
-            dateFrom.value;
-
-
-        const to =
-            dateTo.value;
-
-
-        if (store) {
-
-            params.append(
-                "store",
-                store
+        const result =
+            await fetchJSON(
+                `/forecast?${params.toString()}`
             );
 
-        }
+
+        forecastData =
+            result.data || [];
 
 
-        if (family) {
-
-            params.append(
-                "family",
-                family
-            );
-
-        }
-
-
-        if (from) {
-
-            params.append(
-                "date_from",
-                from
-            );
-
-        }
-
-
-        if (to) {
-
-            params.append(
-                "date_to",
-                to
-            );
-
-        }
-
-
-        /*
-         * Request enough records for
-         * the selected filters.
-         */
-
-        params.append(
-            "limit",
-            "50000"
-        );
-
-
-        const endpoint =
-            `/forecast?${params.toString()}`;
-
-
-        const data =
-            await fetchAPI(endpoint);
-
-
-        filterMessage.textContent =
-            `${data.total_matches.toLocaleString()} matching records found. Showing ${data.count.toLocaleString()}.`;
-
-
-        renderForecastSummary(
-            data.data
-        );
-
-
-        renderForecastChart(
-            data.data
-        );
-
-
-        renderForecastTable(
-            data.data
+        renderForecast(
+            forecastData
         );
 
 
     } catch (error) {
 
         console.error(
-            "Failed to load forecast:",
+            "Forecast loading failed:",
             error
         );
 
 
-        filterMessage.textContent =
-            "Unable to load forecast data.";
-
-
-        clearForecast();
-
+        body.innerHTML = `
+            <tr>
+                <td colspan="6" class="error">
+                    Unable to load forecast data.
+                    Make sure the FastAPI server is running.
+                </td>
+            </tr>
+        `;
     }
-
 }
 
 
-/* =========================
-   FORECAST SUMMARY
-========================= */
+/* =========================================================
+   RENDER FORECAST
+========================================================= */
 
-function renderForecastSummary(data) {
+function renderForecast(data) {
 
-    forecastRecords.textContent =
-        data.length.toLocaleString();
-
-
-    const actualColumn =
-        findActualColumn(data);
-
-
-    const predictionColumn =
-        findPredictionColumn(data);
-
-
-    if (
-        !actualColumn ||
-        !predictionColumn
-    ) {
-
-        totalActual.textContent =
-            "--";
-
-        totalPredicted.textContent =
-            "--";
-
-        avgActual.textContent =
-            "--";
-
-        avgPredicted.textContent =
-            "--";
-
-        return;
-
-    }
-
-
-    const actualValues =
-        getNumericValues(
-            data,
-            actualColumn
-        );
-
-
-    const predictedValues =
-        getNumericValues(
-            data,
-            predictionColumn
-        );
-
-
-    const actualTotal =
-        actualValues.reduce(
-            (sum, value) =>
-                sum + value,
-            0
-        );
-
-
-    const predictedTotal =
-        predictedValues.reduce(
-            (sum, value) =>
-                sum + value,
-            0
-        );
-
-
-    const actualAverage =
-        actualValues.length
-            ? actualTotal /
-              actualValues.length
-            : 0;
-
-
-    const predictedAverage =
-        predictedValues.length
-            ? predictedTotal /
-              predictedValues.length
-            : 0;
-
-
-    totalActual.textContent =
-        formatNumber(
-            actualTotal
-        );
-
-
-    totalPredicted.textContent =
-        formatNumber(
-            predictedTotal
-        );
-
-
-    avgActual.textContent =
-        formatNumber(
-            actualAverage
-        );
-
-
-    avgPredicted.textContent =
-        formatNumber(
-            predictedAverage
-        );
-
-}
-
-
-/* =========================
-   FORECAST CHART
-========================= */
-
-function renderForecastChart(data) {
-
-    const chart =
+    const body =
         document.getElementById(
-            "forecast-chart"
+            "forecastTableBody"
         );
 
 
     if (!data || data.length === 0) {
 
-        chart.innerHTML =
-            "<p>No forecast data available for the selected filters.</p>";
+        body.innerHTML = `
+            <tr>
+                <td colspan="6" class="empty">
+                    No forecast records found.
+                </td>
+            </tr>
+        `;
 
         return;
-
-    }
-
-
-    const dateColumn =
-        findDateColumn(data);
-
-
-    const actualColumn =
-        findActualColumn(data);
-
-
-    const predictionColumn =
-        findPredictionColumn(data);
-
-
-    if (
-        !dateColumn ||
-        !actualColumn ||
-        !predictionColumn
-    ) {
-
-        chart.innerHTML =
-            `
-            <p>
-                Unable to identify date, actual,
-                or prediction columns.
-            </p>
-            `;
-
-        console.error(
-            "Forecast columns:",
-            data.length
-                ? Object.keys(data[0])
-                : []
-        );
-
-        return;
-
     }
 
 
     /*
-     * Aggregate by date.
-     *
-     * This is important because the
-     * forecast dataset contains many
-     * store/product-family records
-     * per date.
-     */
+       Show the first 100 records in the dashboard.
+       The API still loads up to 50,000 records.
+    */
 
-    const aggregated =
-        {};
+    const rows =
+        data.slice(0, 100);
+
+
+    body.innerHTML =
+        rows.map(row => {
+
+            const actual =
+                Number(
+                    row.actual_sales ??
+                    row.sales ??
+                    row.actual ??
+                    0
+                );
+
+
+            const predicted =
+                Number(
+                    row.predicted_sales ??
+                    row.prediction ??
+                    row.predicted ??
+                    0
+                );
+
+
+            const error =
+                predicted - actual;
+
+
+            return `
+                <tr>
+
+                    <td>
+                        ${escapeHtml(row.date ?? "--")}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(row.store_nbr ?? "--")}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(row.family ?? "--")}
+                    </td>
+
+                    <td>
+                        ${formatNumber(actual)}
+                    </td>
+
+                    <td>
+                        ${formatNumber(predicted)}
+                    </td>
+
+                    <td>
+                        ${formatNumber(error)}
+                    </td>
+
+                </tr>
+            `;
+
+        }).join("");
+
+}
+
+
+/* =========================================================
+   INVENTORY
+========================================================= */
+
+async function loadInventory() {
+
+    const body =
+        document.getElementById(
+            "inventoryTableBody"
+        );
+
+
+    body.innerHTML = `
+        <tr>
+            <td colspan="9" class="loading">
+                Loading inventory recommendations...
+            </td>
+        </tr>
+    `;
+
+
+    try {
+
+        /*
+           IMPORTANT:
+           We load the complete inventory dataset from
+           the FastAPI endpoint.
+
+           The backend currently has 1,782 recommendations.
+        */
+
+        const result =
+            await fetchJSON(
+                "/inventory?limit=50000"
+            );
+
+
+        inventoryData =
+            result.data || [];
+
+
+        console.log(
+            "Inventory data loaded:",
+            inventoryData.length
+        );
+
+
+        updatePrioritySummary(
+            inventoryData
+        );
+
+
+        renderInventory();
+
+
+    } catch (error) {
+
+        console.error(
+            "Inventory loading failed:",
+            error
+        );
+
+
+        body.innerHTML = `
+            <tr>
+                <td colspan="9" class="error">
+                    Unable to load inventory recommendations.
+                    Make sure FastAPI is running on port 8000.
+                </td>
+            </tr>
+        `;
+
+
+        document.getElementById(
+            "inventoryMessage"
+        ).textContent =
+            error.message;
+    }
+}
+
+
+/* =========================================================
+   PRIORITY SUMMARY
+========================================================= */
+
+function updatePrioritySummary(data) {
+
+    let high = 0;
+
+    let medium = 0;
+
+    let low = 0;
 
 
     data.forEach(row => {
 
-        const date =
-            row[dateColumn];
+        const priority =
+            String(
+                row.inventory_priority || ""
+            )
+            .trim()
+            .toUpperCase();
 
 
-        const actual =
-            Number(
-                row[actualColumn]
-            );
+        if (priority === "HIGH PRIORITY") {
 
+            high++;
 
-        const predicted =
-            Number(
-                row[predictionColumn]
-            );
-
-
-        if (!date) {
-
-            return;
-
-        }
-
-
-        if (!aggregated[date]) {
-
-            aggregated[date] = {
-
-                actual: 0,
-
-                predicted: 0
-
-            };
-
-        }
-
-
-        if (
-            Number.isFinite(actual)
+        } else if (
+            priority === "MEDIUM PRIORITY"
         ) {
 
-            aggregated[date].actual +=
-                actual;
+            medium++;
 
-        }
-
-
-        if (
-            Number.isFinite(predicted)
+        } else if (
+            priority === "LOW PRIORITY"
         ) {
 
-            aggregated[date].predicted +=
-                predicted;
-
+            low++;
         }
 
     });
 
 
-    const dates =
-        Object.keys(
-            aggregated
-        ).sort();
+    document.getElementById(
+        "highPriorityCount"
+    ).textContent = high;
 
 
-    const actualValues =
-        dates.map(
-            date =>
-                aggregated[date].actual
+    document.getElementById(
+        "mediumPriorityCount"
+    ).textContent = medium;
+
+
+    document.getElementById(
+        "lowPriorityCount"
+    ).textContent = low;
+
+
+    document.getElementById(
+        "totalInventoryCount"
+    ).textContent = data.length;
+}
+
+
+/* =========================================================
+   INVENTORY FILTER
+========================================================= */
+
+function renderInventory() {
+
+    const body =
+        document.getElementById(
+            "inventoryTableBody"
         );
 
 
-    const predictedValues =
-        dates.map(
-            date =>
-                aggregated[date].predicted
-        );
+    const priority =
+        document.getElementById(
+            "inventoryPriority"
+        ).value;
 
 
-    const traces = [
-
-        {
-
-            x: dates,
-
-            y: actualValues,
-
-            mode: "lines",
-
-            name: "Actual Demand",
-
-            line: {
-                width: 2
-            }
-
-        },
-
-        {
-
-            x: dates,
-
-            y: predictedValues,
-
-            mode: "lines",
-
-            name: "Predicted Demand",
-
-            line: {
-                width: 2,
-                dash: "dash"
-            }
-
-        }
-
-    ];
+    const store =
+        document.getElementById(
+            "inventoryStore"
+        ).value;
 
 
-    const layout = {
+    const family =
+        document.getElementById(
+            "inventoryFamily"
+        ).value;
 
-        title: "",
 
-        xaxis: {
+    let filtered =
+        inventoryData.filter(row => {
 
-            title: "Date",
+            const rowPriority =
+                String(
+                    row.inventory_priority || ""
+                )
+                .trim()
+                .toUpperCase();
 
-            type: "date"
 
-        },
+            const rowStore =
+                String(
+                    row.store_nbr ?? ""
+                );
 
-        yaxis: {
 
-            title: "Demand"
+            const rowFamily =
+                String(
+                    row.family ?? ""
+                );
 
-        },
 
-        hovermode: "x unified",
+            const priorityMatch =
+                priority === "ALL" ||
+                rowPriority === priority;
 
-        margin: {
 
-            l: 65,
+            const storeMatch =
+                !store ||
+                rowStore === String(store);
 
-            r: 30,
 
-            t: 20,
+            const familyMatch =
+                !family ||
+                rowFamily === family;
 
-            b: 60
 
-        },
+            return (
+                priorityMatch &&
+                storeMatch &&
+                familyMatch
+            );
 
-        legend: {
+        });
 
-            orientation: "h",
 
-            y: 1.08,
+    /*
+       Sort by priority first.
+    */
 
-            x: 0
-
-        },
-
-        paper_bgcolor:
-            "white",
-
-        plot_bgcolor:
-            "white"
-
+    const priorityOrder = {
+        "HIGH PRIORITY": 1,
+        "MEDIUM PRIORITY": 2,
+        "LOW PRIORITY": 3
     };
 
 
-    Plotly.newPlot(
-        chart,
-        traces,
-        layout,
-        {
-            responsive: true,
-            displaylogo: false
+    filtered.sort(
+        (a, b) => {
+
+            const aPriority =
+                String(
+                    a.inventory_priority || ""
+                )
+                .trim()
+                .toUpperCase();
+
+
+            const bPriority =
+                String(
+                    b.inventory_priority || ""
+                )
+                .trim()
+                .toUpperCase();
+
+
+            return (
+                (priorityOrder[aPriority] || 99) -
+                (priorityOrder[bPriority] || 99)
+            );
+
         }
     );
 
-}
 
+    if (filtered.length === 0) {
 
-/* =========================
-   FORECAST TABLE
-========================= */
-
-function renderForecastTable(data) {
-
-    forecastTableHead.innerHTML =
-        "";
-
-
-    forecastTableBody.innerHTML =
-        "";
-
-
-    if (
-        !data ||
-        data.length === 0
-    ) {
-
-        forecastTableBody.innerHTML =
-            `
+        body.innerHTML = `
             <tr>
-                <td>
-                    No forecast data available.
+                <td colspan="9" class="empty">
+                    No inventory recommendations
+                    match the selected filters.
                 </td>
             </tr>
-            `;
+        `;
+
+
+        document.getElementById(
+            "inventoryMessage"
+        ).textContent =
+            "0 recommendations found.";
 
         return;
-
     }
 
 
-    const columns =
-        Object.keys(
-            data[0]
-        );
-
-
     /*
-     * Display only a reasonable
-     * number of columns.
-     */
+       Render maximum 500 rows in browser.
+    */
 
-    const visibleColumns =
-        columns.slice(
-            0,
-            10
-        );
+    const rows =
+        filtered.slice(0, 500);
 
 
-    const headerRow =
-        document.createElement(
-            "tr"
-        );
+    body.innerHTML =
+        rows.map(row => {
+
+            const priority =
+                String(
+                    row.inventory_priority || "UNKNOWN"
+                )
+                .trim()
+                .toUpperCase();
 
 
-    visibleColumns.forEach(
-        column => {
-
-            const th =
-                document.createElement(
-                    "th"
-                );
+            let badgeClass =
+                "priority-unknown";
 
 
-            th.textContent =
-                formatColumnName(
-                    column
-                );
+            if (
+                priority === "HIGH PRIORITY"
+            ) {
 
+                badgeClass =
+                    "priority-high";
 
-            headerRow.appendChild(
-                th
-            );
+            } else if (
+                priority === "MEDIUM PRIORITY"
+            ) {
 
-        }
-    );
+                badgeClass =
+                    "priority-medium";
 
+            } else if (
+                priority === "LOW PRIORITY"
+            ) {
 
-    forecastTableHead.appendChild(
-        headerRow
-    );
-
-
-    /*
-     * Limit visible rows so
-     * browser doesn't become slow.
-     */
-
-    const visibleRows =
-        data.slice(
-            0,
-            100
-        );
-
-
-    visibleRows.forEach(row => {
-
-        const tr =
-            document.createElement(
-                "tr"
-            );
-
-
-        visibleColumns.forEach(
-            column => {
-
-                const td =
-                    document.createElement(
-                        "td"
-                    );
-
-
-                td.textContent =
-                    formatValue(
-                        row[column]
-                    );
-
-
-                tr.appendChild(td);
-
+                badgeClass =
+                    "priority-low";
             }
-        );
 
 
-        forecastTableBody.appendChild(
-            tr
-        );
+            return `
+                <tr>
 
-    });
-
-}
-
-
-/* =========================
-   CLEAR FORECAST
-========================= */
-
-function clearForecast() {
-
-    forecastRecords.textContent =
-        "--";
-
-    totalActual.textContent =
-        "--";
-
-    totalPredicted.textContent =
-        "--";
-
-    avgActual.textContent =
-        "--";
-
-    avgPredicted.textContent =
-        "--";
+                    <td>
+                        <span
+                            class="priority-badge ${badgeClass}"
+                        >
+                            ${escapeHtml(priority)}
+                        </span>
+                    </td>
 
 
-    forecastTableHead.innerHTML =
-        "";
+                    <td>
+                        ${escapeHtml(
+                            row.store_nbr ?? "--"
+                        )}
+                    </td>
 
 
-    forecastTableBody.innerHTML =
-        "";
+                    <td>
+                        ${escapeHtml(
+                            row.family ?? "--"
+                        )}
+                    </td>
 
 
-    const chart =
-        document.getElementById(
-            "forecast-chart"
-        );
+                    <td>
+                        ${escapeHtml(
+                            row.city ?? "--"
+                        )}
+                    </td>
 
 
-    chart.innerHTML =
-        "<p>No forecast data available.</p>";
-
-}
-
-
-/* =========================
-   COLUMN DETECTION
-========================= */
-
-function findDateColumn(data) {
-
-    if (!data.length) {
-        return null;
-    }
+                    <td>
+                        ${formatNumber(
+                            row.forecast_7_day
+                        )}
+                    </td>
 
 
-    const columns =
-        Object.keys(data[0]);
+                    <td>
+                        ${formatNumber(
+                            row.average_daily_demand
+                        )}
+                    </td>
 
 
-    return findColumn(
-        columns,
-        [
-            "date"
-        ]
-    );
-
-}
+                    <td>
+                        ${formatNumber(
+                            row.safety_stock
+                        )}
+                    </td>
 
 
-function findActualColumn(data) {
-
-    if (!data.length) {
-        return null;
-    }
-
-
-    const columns =
-        Object.keys(data[0]);
+                    <td>
+                        ${formatNumber(
+                            row.reorder_point
+                        )}
+                    </td>
 
 
-    return findColumn(
-        columns,
-        [
-            "actual",
-            "actual_sales",
-            "sales",
-            "y_true",
-            "target"
-        ]
-    );
+                    <td>
+                        <strong>
+                            ${formatNumber(
+                                row.recommended_stock
+                            )}
+                        </strong>
+                    </td>
+
+                </tr>
+            `;
+
+        }).join("");
+
+
+    document.getElementById(
+        "inventoryMessage"
+    ).textContent =
+        `Showing ${rows.length} of ${filtered.length} recommendations.`;
 
 }
 
 
-function findPredictionColumn(data) {
-
-    if (!data.length) {
-        return null;
-    }
-
-
-    const columns =
-        Object.keys(data[0]);
-
-
-    return findColumn(
-        columns,
-        [
-            "predicted",
-            "prediction",
-            "predicted_sales",
-            "forecast",
-            "y_pred"
-        ]
-    );
-
-}
-
-
-function findColumn(
-    columns,
-    possibleNames
-) {
-
-    /*
-     * Exact match first.
-     */
-
-    for (
-        const name of possibleNames
-    ) {
-
-        const exact =
-            columns.find(
-                column =>
-                    column.toLowerCase()
-                    === name.toLowerCase()
-            );
-
-
-        if (exact) {
-
-            return exact;
-
-        }
-
-    }
-
-
-    /*
-     * Then partial match.
-     */
-
-    return columns.find(
-        column => {
-
-            const lower =
-                column.toLowerCase();
-
-
-            return possibleNames.some(
-                name =>
-                    lower.includes(
-                        name.toLowerCase()
-                    )
-            );
-
-        }
-    );
-
-}
-
-
-/* =========================
-   NUMERIC HELPERS
-========================= */
-
-function getNumericValues(
-    data,
-    column
-) {
-
-    return data
-        .map(
-            row =>
-                Number(row[column])
-        )
-        .filter(
-            value =>
-                Number.isFinite(value)
-        );
-
-}
-
-
-function formatNumber(value) {
-
-    if (
-        !Number.isFinite(value)
-    ) {
-
-        return "--";
-
-    }
-
-
-    return value.toLocaleString(
-        undefined,
-        {
-            maximumFractionDigits: 2
-        }
-    );
-
-}
-
-
-function formatValue(value) {
-
-    if (
-        value === null ||
-        value === undefined
-    ) {
-
-        return "-";
-
-    }
-
-
-    if (
-        typeof value === "number"
-    ) {
-
-        return value.toLocaleString(
-            undefined,
-            {
-                maximumFractionDigits: 4
-            }
-        );
-
-    }
-
-
-    return value;
-
-}
-
-
-function formatColumnName(
-    column
-) {
-
-    return column
-        .replaceAll("_", " ")
-        .replace(
-            /\b\w/g,
-            char =>
-                char.toUpperCase()
-        );
-
-}
-
-
-/* =========================
-   RESET FILTERS
-========================= */
-
-function resetFilters() {
-
-    storeFilter.value =
-        "";
-
-    familyFilter.value =
-        "";
-
-    dateFrom.value =
-        "";
-
-    dateTo.value =
-        "";
-
-
-    loadForecast();
-
-}
-
-
-/* =========================
+/* =========================================================
    EVENT LISTENERS
-========================= */
+========================================================= */
 
-applyFiltersButton
-    .addEventListener(
+function setupEventListeners() {
+
+
+    document.getElementById(
+        "forecastButton"
+    ).addEventListener(
         "click",
         loadForecast
     );
 
 
-resetFiltersButton
-    .addEventListener(
+    document.getElementById(
+        "inventoryFilterButton"
+    ).addEventListener(
         "click",
-        resetFilters
+        renderInventory
     );
 
 
-/* =========================
-   INITIALIZE
-========================= */
-
-async function initializeDashboard() {
-
-    console.log(
-        "Initializing dashboard..."
+    document.getElementById(
+        "inventoryRefreshButton"
+    ).addEventListener(
+        "click",
+        loadInventory
     );
-
-
-    await Promise.all([
-
-        loadHealth(),
-
-        loadStores(),
-
-        loadFamilies(),
-
-        loadMetrics()
-
-    ]);
 
 
     /*
-     * Load initial forecast
-     * after metadata is available.
-     */
+       Optional: changing priority immediately updates table.
+    */
 
-    await loadForecast();
-
-
-    console.log(
-        "Dashboard initialization complete."
+    document.getElementById(
+        "inventoryPriority"
+    ).addEventListener(
+        "change",
+        renderInventory
     );
 
 }
 
 
-initializeDashboard();
+/* =========================================================
+   INITIALIZE DASHBOARD
+========================================================= */
+
+async function initDashboard() {
+
+    console.log(
+        "Initializing Retail Demand Forecasting Dashboard..."
+    );
+
+
+    setupEventListeners();
+
+
+    /*
+       Load all dashboard components.
+    */
+
+    await Promise.all([
+        checkAPI(),
+        loadOverview(),
+        loadForecast(),
+        loadInventory()
+    ]);
+
+
+    console.log(
+        "Dashboard initialization complete."
+    );
+}
+
+
+/* =========================================================
+   START
+========================================================= */
+
+window.addEventListener(
+    "DOMContentLoaded",
+    initDashboard
+);

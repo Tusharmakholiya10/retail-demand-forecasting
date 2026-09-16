@@ -1,174 +1,318 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-
     <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>Retail Demand Forecasting</title>
 
-    <link rel="stylesheet" href="style.css">
-
-    <!-- Plotly -->
-    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-
+    <!-- Cache-busting -->
+    <link rel="stylesheet" href="style.css?v=4">
 </head>
-
 
 <body>
 
-
-    <!-- =========================
-         HEADER
-    ========================== -->
-
-    <header class="header">
-
+    <!-- ================= HEADER ================= -->
+    <header class="topbar">
         <div>
-
-            <h1>
-                Retail Demand Forecasting
-            </h1>
-
-            <p>
-                AI-powered demand forecasting & inventory intelligence
-            </p>
-
+            <h1>Retail Demand Forecasting</h1>
+            <p>AI-powered demand forecasting & inventory intelligence</p>
         </div>
 
-
-        <div
-            id="api-status"
-            class="status"
-        >
-            Checking API...
+        <div class="api-status">
+            <span id="statusDot" class="status-dot"></span>
+            <span id="apiStatus">Checking API...</span>
         </div>
-
     </header>
-
 
 
     <main class="container">
 
-
-        <!-- =========================
-             PAGE TITLE
-        ========================== -->
-
-        <section class="page-title">
-
-            <h2>
-                Demand Forecasting Dashboard
-            </h2>
-
-            <p>
-                Analyze historical demand, compare predictions,
-                and explore forecast performance.
-            </p>
-
-        </section>
-
-
-
-        <!-- =========================
-             KPI CARDS
-        ========================== -->
-
+        <!-- ================= KPI CARDS ================= -->
         <section class="kpi-grid">
 
-
             <div class="kpi-card">
-
-                <span class="kpi-label">
-                    Total Stores
-                </span>
-
-                <strong id="store-count">
-                    --
-                </strong>
-
+                <span class="kpi-label">Total Stores</span>
+                <strong id="totalStores">--</strong>
             </div>
 
-
             <div class="kpi-card">
-
-                <span class="kpi-label">
-                    Product Families
-                </span>
-
-                <strong id="family-count">
-                    --
-                </strong>
-
+                <span class="kpi-label">Product Families</span>
+                <strong id="totalFamilies">--</strong>
             </div>
 
-
             <div class="kpi-card">
-
-                <span class="kpi-label">
-                    Best Model
-                </span>
-
-                <strong id="best-model">
-                    --
-                </strong>
-
+                <span class="kpi-label">Best Model</span>
+                <strong id="bestModel">--</strong>
             </div>
 
-
             <div class="kpi-card">
-
-                <span class="kpi-label">
-                    API Status
-                </span>
-
-                <strong id="api-kpi">
-                    --
-                </strong>
-
+                <span class="kpi-label">API Status</span>
+                <strong id="apiKpi">--</strong>
             </div>
-
 
         </section>
 
 
-
-        <!-- =========================
-             FILTERS
-        ========================== -->
-
-        <section class="card">
+        <!-- ================= MODEL PERFORMANCE ================= -->
+        <section class="dashboard-section">
 
             <div class="section-header">
+                <div>
+                    <h2>Model Performance</h2>
+                    <p>Comparison of forecasting models</p>
+                </div>
+            </div>
 
-                <h3>
-                    Forecast Filters
-                </h3>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Model</th>
+                            <th>MAE</th>
+                            <th>RMSE</th>
+                            <th>RMSLE</th>
+                            <th>WAPE</th>
+                        </tr>
+                    </thead>
 
-                <p>
-                    Select a store, product family, and date range.
-                </p>
+                    <tbody id="modelTableBody">
+                        <tr>
+                            <td colspan="5" class="loading">
+                                Loading model performance...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </section>
+
+
+        <!-- ================= FORECAST FILTERS ================= -->
+        <section class="dashboard-section">
+
+            <div class="section-header">
+                <div>
+                    <h2>Demand Forecast</h2>
+                    <p>Explore historical forecast predictions</p>
+                </div>
+            </div>
+
+            <div class="filters">
+
+                <div class="filter-group">
+                    <label for="forecastStore">Store</label>
+
+                    <select id="forecastStore">
+                        <option value="">All Stores</option>
+                    </select>
+                </div>
+
+
+                <div class="filter-group">
+                    <label for="forecastFamily">Product Family</label>
+
+                    <select id="forecastFamily">
+                        <option value="">All Families</option>
+                    </select>
+                </div>
+
+
+                <div class="filter-group">
+                    <label for="dateFrom">Date From</label>
+
+                    <input
+                        type="date"
+                        id="dateFrom"
+                    >
+                </div>
+
+
+                <div class="filter-group">
+                    <label for="dateTo">Date To</label>
+
+                    <input
+                        type="date"
+                        id="dateTo"
+                    >
+                </div>
+
+
+                <button
+                    id="forecastButton"
+                    class="primary-button"
+                >
+                    Apply Filters
+                </button>
 
             </div>
 
 
-            <div class="filter-grid">
+            <div class="table-wrapper">
+
+                <table>
+
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Store</th>
+                            <th>Family</th>
+                            <th>Actual Sales</th>
+                            <th>Predicted Sales</th>
+                            <th>Error</th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="forecastTableBody">
+
+                        <tr>
+                            <td colspan="6" class="loading">
+                                Loading forecasts...
+                            </td>
+                        </tr>
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
 
 
-                <!-- Store -->
+        <!-- ====================================================== -->
+        <!-- IMPORTANT: INVENTORY PRIORITY SECTION -->
+        <!-- ====================================================== -->
+
+        <section
+            id="inventorySection"
+            class="dashboard-section inventory-section"
+        >
+
+            <div class="section-header inventory-header">
+
+                <div>
+                    <h2>Inventory Planning & Reorder Priorities</h2>
+
+                    <p>
+                        AI-powered inventory recommendations based on
+                        forecasted demand, safety stock and reorder points.
+                    </p>
+                </div>
+
+                <button
+                    id="inventoryRefreshButton"
+                    class="secondary-button"
+                >
+                    Refresh Inventory
+                </button>
+
+            </div>
+
+
+            <!-- ================= PRIORITY SUMMARY ================= -->
+
+            <div class="priority-summary">
+
+                <div class="priority-card high-card">
+
+                    <div class="priority-icon">
+                        !
+                    </div>
+
+                    <div>
+                        <span>High Priority</span>
+                        <strong id="highPriorityCount">0</strong>
+                    </div>
+
+                </div>
+
+
+                <div class="priority-card medium-card">
+
+                    <div class="priority-icon">
+                        !
+                    </div>
+
+                    <div>
+                        <span>Medium Priority</span>
+                        <strong id="mediumPriorityCount">0</strong>
+                    </div>
+
+                </div>
+
+
+                <div class="priority-card low-card">
+
+                    <div class="priority-icon">
+                        ✓
+                    </div>
+
+                    <div>
+                        <span>Low Priority</span>
+                        <strong id="lowPriorityCount">0</strong>
+                    </div>
+
+                </div>
+
+
+                <div class="priority-card total-card">
+
+                    <div class="priority-icon">
+                        #
+                    </div>
+
+                    <div>
+                        <span>Total Recommendations</span>
+                        <strong id="totalInventoryCount">0</strong>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- ================= INVENTORY FILTERS ================= -->
+
+            <div class="inventory-filters">
 
                 <div class="filter-group">
 
-                    <label for="store-filter">
+                    <label for="inventoryPriority">
+                        Priority
+                    </label>
+
+                    <select id="inventoryPriority">
+
+                        <option value="ALL">
+                            All Priorities
+                        </option>
+
+                        <option value="HIGH PRIORITY">
+                            High Priority
+                        </option>
+
+                        <option value="MEDIUM PRIORITY">
+                            Medium Priority
+                        </option>
+
+                        <option value="LOW PRIORITY">
+                            Low Priority
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <div class="filter-group">
+
+                    <label for="inventoryStore">
                         Store
                     </label>
 
-                    <select id="store-filter">
+                    <select id="inventoryStore">
 
                         <option value="">
                             All Stores
@@ -179,16 +323,13 @@
                 </div>
 
 
-
-                <!-- Family -->
-
                 <div class="filter-group">
 
-                    <label for="family-filter">
+                    <label for="inventoryFamily">
                         Product Family
                     </label>
 
-                    <select id="family-filter">
+                    <select id="inventoryFamily">
 
                         <option value="">
                             All Families
@@ -199,355 +340,81 @@
                 </div>
 
 
-
-                <!-- Date From -->
-
-                <div class="filter-group">
-
-                    <label for="date-from">
-                        Date From
-                    </label>
-
-                    <input
-                        type="date"
-                        id="date-from"
-                    >
-
-                </div>
-
-
-
-                <!-- Date To -->
-
-                <div class="filter-group">
-
-                    <label for="date-to">
-                        Date To
-                    </label>
-
-                    <input
-                        type="date"
-                        id="date-to"
-                    >
-
-                </div>
-
-
-            </div>
-
-
-
-            <div class="filter-actions">
-
                 <button
-                    id="apply-filters"
+                    id="inventoryFilterButton"
                     class="primary-button"
                 >
-                    Apply Filters
-                </button>
-
-
-                <button
-                    id="reset-filters"
-                    class="secondary-button"
-                >
-                    Reset
+                    Apply Inventory Filter
                 </button>
 
             </div>
 
 
-            <p
-                id="filter-message"
-                class="filter-message"
-            ></p>
+            <!-- ================= INVENTORY TABLE ================= -->
 
-
-        </section>
-
-
-
-        <!-- =========================
-             FORECAST KPIs
-        ========================== -->
-
-        <section class="forecast-kpi-grid">
-
-
-            <div class="small-kpi">
-
-                <span>
-                    Records
-                </span>
-
-                <strong id="forecast-records">
-                    --
-                </strong>
-
-            </div>
-
-
-            <div class="small-kpi">
-
-                <span>
-                    Total Actual
-                </span>
-
-                <strong id="total-actual">
-                    --
-                </strong>
-
-            </div>
-
-
-            <div class="small-kpi">
-
-                <span>
-                    Total Predicted
-                </span>
-
-                <strong id="total-predicted">
-                    --
-                </strong>
-
-            </div>
-
-
-            <div class="small-kpi">
-
-                <span>
-                    Avg Actual
-                </span>
-
-                <strong id="avg-actual">
-                    --
-                </strong>
-
-            </div>
-
-
-            <div class="small-kpi">
-
-                <span>
-                    Avg Predicted
-                </span>
-
-                <strong id="avg-predicted">
-                    --
-                </strong>
-
-            </div>
-
-
-        </section>
-
-
-
-        <!-- =========================
-             FORECAST CHART
-        ========================== -->
-
-        <section class="card">
-
-            <div class="section-header">
-
-                <h3>
-                    Actual vs Predicted Demand
-                </h3>
-
-                <p>
-                    Compare actual demand with model predictions.
-                </p>
-
-            </div>
-
-
-            <div
-                id="forecast-chart"
-                class="chart"
-            ></div>
-
-
-        </section>
-
-
-
-        <!-- =========================
-             FORECAST TABLE
-        ========================== -->
-
-        <section class="card">
-
-            <div class="section-header">
-
-                <h3>
-                    Forecast Data
-                </h3>
-
-                <p>
-                    Forecast records returned by the FastAPI backend.
-                </p>
-
-            </div>
-
-
-            <div class="table-container">
-
-                <table>
-
-                    <thead id="forecast-table-head">
-                    </thead>
-
-                    <tbody id="forecast-table-body">
-                    </tbody>
-
-                </table>
-
-            </div>
-
-        </section>
-
-
-
-        <!-- =========================
-             MODEL PERFORMANCE
-        ========================== -->
-
-        <section class="card">
-
-            <div class="section-header">
-
-                <h3>
-                    Model Performance
-                </h3>
-
-                <p>
-                    Performance comparison of forecasting models.
-                </p>
-
-            </div>
-
-
-            <div class="table-container">
+            <div class="table-wrapper inventory-table-wrapper">
 
                 <table>
 
                     <thead>
 
-                        <tr id="metrics-header">
+                        <tr>
+                            <th>Priority</th>
+                            <th>Store</th>
+                            <th>Product Family</th>
+                            <th>City</th>
+                            <th>7-Day Forecast</th>
+                            <th>Daily Demand</th>
+                            <th>Safety Stock</th>
+                            <th>Reorder Point</th>
+                            <th>Recommended Stock</th>
                         </tr>
 
                     </thead>
 
-                    <tbody id="metrics-body">
+
+                    <tbody id="inventoryTableBody">
+
+                        <tr>
+                            <td colspan="9" class="loading">
+                                Loading inventory recommendations...
+                            </td>
+                        </tr>
+
                     </tbody>
 
                 </table>
 
             </div>
 
-        </section>
 
-
-
-        <!-- =========================
-             DATASET OVERVIEW
-        ========================== -->
-
-        <section class="card">
-
-            <div class="section-header">
-
-                <h3>
-                    Dataset Overview
-                </h3>
-
-                <p>
-                    Available stores and product families.
-                </p>
-
-            </div>
-
-
-            <div class="dataset-grid">
-
-
-                <div class="dataset-box">
-
-                    <h4>
-                        Stores
-                    </h4>
-
-                    <div
-                        id="stores-list"
-                        class="tag-container"
-                    >
-                        Loading...
-                    </div>
-
-                </div>
-
-
-
-                <div class="dataset-box">
-
-                    <h4>
-                        Product Families
-                    </h4>
-
-                    <div
-                        id="families-list"
-                        class="tag-container"
-                    >
-                        Loading...
-                    </div>
-
-                </div>
-
-
-            </div>
+            <div
+                id="inventoryMessage"
+                class="inventory-message"
+            ></div>
 
         </section>
 
 
+        <!-- ================= FOOTER ================= -->
 
-        <!-- =========================
-             SYSTEM STATUS
-        ========================== -->
+        <footer>
 
-        <section class="card status-card">
-
-            <h3>
-                System Status
-            </h3>
-
-            <p id="system-message">
-                Connecting to forecasting API...
+            <p>
+                Retail Demand Forecasting & Inventory Intelligence
             </p>
 
-        </section>
+            <p>
+                FastAPI + Python + LightGBM
+            </p>
 
+        </footer>
 
     </main>
 
 
-
-    <footer>
-
-        <p>
-            Retail Demand Forecasting System
-        </p>
-
-        <p>
-            FastAPI + JavaScript + Plotly
-        </p>
-
-    </footer>
-
-
-
-    <script src="app.js"></script>
+    <!-- Cache-busting -->
+    <script src="app.js?v=4"></script>
 
 </body>
-
 </html>
