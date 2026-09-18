@@ -5,7 +5,7 @@ from typing import Optional
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.cors import CORSMiddleware
+
 
 
 # ============================================================
@@ -28,22 +28,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app = FastAPI(
-    title="Retail Demand Forecasting API",
-    description=(
-        "FastAPI backend for retail demand forecasting, "
-        "inventory recommendations, model metrics, and metadata."
-    ),
-    version="1.2.0",
-)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 # ============================================================
 # PROJECT PATHS
 # ============================================================
