@@ -2,7 +2,7 @@
    RETAIL DEMAND FORECASTING DASHBOARD
 ========================================================= */
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = "https://retail-demand-forecasting-xky3.onrender.com";
 
 let inventoryData = [];
 let forecastData = [];

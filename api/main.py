@@ -5,6 +5,7 @@ from typing import Optional
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 
 
 # ============================================================
@@ -18,6 +19,13 @@ app = FastAPI(
         "inventory recommendations, model metrics, and metadata."
     ),
     version="1.2.0",
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app = FastAPI(
